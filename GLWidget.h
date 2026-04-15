@@ -37,6 +37,8 @@ public:
     explicit GLWidget(QWidget* parent = nullptr);
     ~GLWidget();
 
+    void reloadConfig();
+
 protected:
     void initializeGL() override;
     void paintGL() override;
@@ -55,6 +57,7 @@ private:
     void setupShaders();
     void createFountains();
     void createParticle(int fountainId);
+    void applyConfig();
 
     // 相机控制
     QMatrix4x4 m_projection;
@@ -89,15 +92,36 @@ private:
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
 
-    static const int FOUNTAIN_COUNT = 50;
     static const int MAX_PARTICLES = 10000;
-    static const float GRAVITY;
     static const float GROUND_Y;
 
-    float m_spawnTimer;
+    // 运行时参数
+    int m_fountainCount;
+    float m_fountainSpacing;
+    float m_startX;
+    float m_fountainHeight;
+    float m_waterJetLength;
+    float m_waterJetTopWidth;
+    float m_waterJetBottomWidth;
     float m_spawnRate;
+    float m_particleMinSize;
+    float m_particleMaxSize;
+    float m_particleMinLife;
+    float m_particleMaxLife;
+    float m_particleSpeedX;
+    float m_particleSpeedYMin;
+    float m_particleSpeedYMax;
+    float m_particleSpeedZ;
+    float m_poolWidth;
+    float m_poolDepth;
+    float m_waterAlpha;
+    QVector3D m_waterColor;
+    float m_windStrength;
+    float m_windDirection;
+
+    float m_spawnTimer;
+    float m_lastTime;
+    int m_timerId;
 
     QElapsedTimer m_elapsedTimer;
-    float m_lastTime = 0;
-    int m_timerId = 0;
 };
