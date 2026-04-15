@@ -21,3 +21,12 @@ target_link_libraries(ParticleFountain
     Qt6::OpenGL
     Qt6::OpenGLWidgets
 )
+
+# 简单的文件复制（不使用 add_custom_command）
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/FountainConfig.json")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/FountainConfig.json"
+        "${CMAKE_CURRENT_BINARY_DIR}/FountainConfig.json"
+        COPYONLY
+    )
+endif()
