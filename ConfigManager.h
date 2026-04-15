@@ -10,6 +10,9 @@ public:
 
     bool loadConfig(const QString& filePath = "FountainConfig.json");
     void saveConfig(const QString& filePath = "FountainConfig.json");
+    // 在 ConfigManager 类中添加
+    bool getAutoScale() const { return m_autoScale; }
+    void setAutoScale(bool scale) { m_autoScale = scale; }
 
     // 水阀参数
     int getFountainCount() const { return m_fountainCount; }
@@ -56,7 +59,8 @@ public:
 
 private:
     ConfigManager() = default;
-
+    // 在 private 成员中添加
+    bool m_autoScale = true;
     // 水阀参数
     int m_fountainCount = 50;
     float m_fountainSpacing = 0.35f;
