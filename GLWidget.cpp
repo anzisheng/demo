@@ -71,6 +71,44 @@ GLWidget::~GLWidget()
     if (m_poolVAO) glDeleteVertexArrays(1, &m_poolVAO);
     doneCurrent();
 }
+void GLWidget::autoAdjustCamera()
+{
+    // 计算水阀阵列的总宽度
+    float totalWidth = m_fountainCount * m_fountainSpacing;
+    float halfWidth = totalWidth / 2.0f;
+
+    // 根据水阀数量计算需要的相机距离
+    // 公式：视野角度45度，tan(22.5°) ≈ 0.414
+    // 所需距离 = 半宽 / tan(视野半角)
+    float requiredDistance = halfWidth / 0.414f;
+
+    // 加上一些余量，并限制范围
+    float minDistance = 8.0f;
+    float maxDistance = 35.0f;
+    m_cameraDistance = qBound(minDistance, requiredDistance + 2.0f, maxDistance);
+
+    // 根据水阀数量调整相机目标点的Y坐标
+    // 水阀数量多时，相机稍微抬高，看到更多水阀
+    float targetY = 2.5f;
+    if (m_fountainCount > 60) {
+        targetY = 3.0f;
+    }
+    else if (m_fountainCount > 80) {
+        targetY = 3.5f;
+    }
+    m_cameraTarget.setY(targetY);
+
+    // 更新相机位置
+    float radX = qDegreesToRadians(m_cameraAngleX);
+    float radY = qDegreesToRadians(m_cameraAngleY);
+    m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
+    m_cameraPos.setY(m_cameraDistance * sin(radY));
+    m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
+
+    qDebug() << "Camera adjusted - Distance:" << m_cameraDistance
+        << "Target Y:" << targetY
+        << "Total width:" << totalWidth;
+}
 
 void GLWidget::applyConfig()
 {
@@ -96,60 +134,22 @@ void GLWidget::applyConfig()
     m_windStrength = config.getWindStrength();
     m_windDirection = config.getWindDirection();
 
-    if (config.getAutoScale()) {
-        // 根据水阀数量自动计算布局参数
-        float totalWidth = m_fountainCount * m_fountainSpacing;
-        m_startX = -totalWidth / 2.0f;
-        m_poolWidth = totalWidth + 2.0f;
-        m_poolDepth = 12.0f;
-
-        // 自动调整相机距离
-        float baseDistance = 15.0f;
-        float distanceScale = 1.0f + (m_fountainCount - 50) / 100.0f;
-        m_cameraDistance = qBound(8.0f, baseDistance * distanceScale, 25.0f);
-
-        // 更新相机位置
-        float radX = qDegreesToRadians(m_cameraAngleX);
-        float radY = qDegreesToRadians(m_cameraAngleY);
-        m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
-        m_cameraPos.setY(m_cameraDistance * sin(radY));
-        m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
-
-        qDebug() << "Auto-scaling enabled - Total width:" << totalWidth << "Pool width:" << m_poolWidth;
-    }
-    else {
-        // 使用配置文件中的值
-        m_startX = config.getStartX();
-        m_poolWidth = config.getPoolWidth();
-        m_poolDepth = config.getPoolDepth();
-    }
-
-    // 根据水阀数量自动计算布局参数
-    // 总宽度 = 水阀个数 * 间距
+    // 计算总宽度
     float totalWidth = m_fountainCount * m_fountainSpacing;
-
-    // 自动计算起始X坐标，使水阀阵列居中
     m_startX = -totalWidth / 2.0f;
 
     // 根据水阀数量自动调整水池大小
-    m_poolWidth = totalWidth + 2.0f;  // 两边各留1米边距
-    m_poolDepth = 12.0f;              // 深度固定
+    m_poolWidth = totalWidth + 3.0f;   // 左右各留1.5米边距
+    m_poolDepth = 14.0f;               // 深度固定
 
-    // 根据水阀数量自动调整相机距离
-    float baseDistance = 15.0f;
-    float distanceScale = 1.0f + (m_fountainCount - 50) / 100.0f;
-    m_cameraDistance = qBound(8.0f, baseDistance * distanceScale, 25.0f);
+    // 自动调整相机位置
+    autoAdjustCamera();
 
-    // 更新相机位置
-    float radX = qDegreesToRadians(m_cameraAngleX);
-    float radY = qDegreesToRadians(m_cameraAngleY);
-    m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
-    m_cameraPos.setY(m_cameraDistance * sin(radY));
-    m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
-
-    qDebug() << "Layout calculated - Total width:" << totalWidth << "Pool width:" << m_poolWidth;
+    qDebug() << "Layout calculated - Count:" << m_fountainCount
+        << "Total width:" << totalWidth
+        << "Pool width:" << m_poolWidth
+        << "Camera distance:" << m_cameraDistance;
 }
-
 void GLWidget::reloadConfig()
 {
     ConfigManager::getInstance().loadConfig();
@@ -163,10 +163,12 @@ void GLWidget::reloadConfig()
         createParticle(fountainId);
     }
 
+    // 重新设置缓冲区大小
+    setupBuffers();
+
     update();
     qDebug() << "Configuration reloaded, fountain count:" << m_fountainCount;
 }
-
 void GLWidget::createFountains()
 {
     m_fountains.clear();
@@ -233,6 +235,7 @@ void GLWidget::initializeGL()
     setupShaders();
     setupBuffers();
 
+    // 初始化粒子
     for (int i = 0; i < 200; ++i) {
         int fountainId = QRandomGenerator::global()->bounded(m_fountainCount);
         createParticle(fountainId);
@@ -242,6 +245,14 @@ void GLWidget::initializeGL()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.02f, 0.03f, 0.08f, 1.0f);
+
+    // 自动调整相机（基于水阀数量）
+    autoAdjustCamera();
+
+    // 更新投影矩阵
+    float aspect = width() / float(height());
+    m_projection.setToIdentity();
+    m_projection.perspective(45.0f, aspect, 0.1f, 100.0f);
 
     m_elapsedTimer.start();
     m_lastTime = 0;
@@ -377,6 +388,15 @@ void GLWidget::setupShaders()
 
 void GLWidget::setupBuffers()
 {
+    // 清理旧的缓冲区
+    if (m_particleVBO) glDeleteBuffers(1, &m_particleVBO);
+    if (m_particleVAO) glDeleteVertexArrays(1, &m_particleVAO);
+    if (m_jetVBO) glDeleteBuffers(1, &m_jetVBO);
+    if (m_jetVAO) glDeleteVertexArrays(1, &m_jetVAO);
+    if (m_valveVAO) glDeleteVertexArrays(1, &m_valveVAO);
+    if (m_poolVBO) glDeleteBuffers(1, &m_poolVBO);
+    if (m_poolVAO) glDeleteVertexArrays(1, &m_poolVAO);
+
     // 粒子缓冲区
     glGenVertexArrays(1, &m_particleVAO);
     glBindVertexArray(m_particleVAO);
@@ -458,7 +478,7 @@ void GLWidget::setupBuffers()
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-    // 水池缓冲区 - 使用动态计算的大小
+    // 水池缓冲区
     float y = -1.05f;
 
     float poolVertices[] = {
@@ -486,9 +506,8 @@ void GLWidget::setupBuffers()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    qDebug() << "All buffers setup complete";
+    qDebug() << "Buffers recreated for" << m_fountainCount << "valves";
 }
-
 void GLWidget::updateWaterJets(float dt)
 {
     static float timeOffset = 0.0f;

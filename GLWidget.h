@@ -58,7 +58,8 @@ private:
     void createFountains();
     void createParticle(int fountainId);
     void applyConfig();
-
+    // 在 private 部分添加
+    void autoAdjustCamera();
     // 相机控制
     QMatrix4x4 m_projection;
     QVector3D m_cameraPos;
