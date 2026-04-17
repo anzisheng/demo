@@ -56,11 +56,17 @@ public:
     void setSpawnRate(float rate) { m_spawnRate = rate; }
     void setWindStrength(float strength) { m_windStrength = strength; }
     void setWindDirection(float direction) { m_windDirection = direction; }
+    float getArcRadius() const { return m_arcRadius; }
+    float getArcAngle() const { return m_arcAngle; }
+    void setArcRadius(float radius) { m_arcRadius = radius; }
+    void setArcAngle(float angle) { m_arcAngle = angle; }
 
 private:
     ConfigManager() = default;
     // 在 private 成员中添加
     bool m_autoScale = true;
+    float m_arcRadius = 8.0f;
+    float m_arcAngle = 120.0f;
     // 水阀参数
     int m_fountainCount = 50;
     float m_fountainSpacing = 0.35f;

@@ -70,6 +70,9 @@ private:
     QPoint m_lastMousePos;
     bool m_mousePressed;
 
+    // 在 private 成员中添加
+    float m_arcRadius;
+    float m_arcAngle;
     // 着色器
     QOpenGLShaderProgram m_particleProgram;
     QOpenGLShaderProgram m_jetProgram;

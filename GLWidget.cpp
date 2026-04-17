@@ -47,6 +47,8 @@ GLWidget::GLWidget(QWidget* parent)
     , m_spawnTimer(0.0f)
     , m_lastTime(0.0f)
     , m_timerId(0)
+    , m_arcRadius(8.0f)
+    , m_arcAngle(120.0f)
 {
     ConfigManager::getInstance().loadConfig();
     applyConfig();
@@ -73,32 +75,27 @@ GLWidget::~GLWidget()
 }
 void GLWidget::autoAdjustCamera()
 {
-    // 计算水阀阵列的总宽度
-    float totalWidth = m_fountainCount * m_fountainSpacing;
+    // 弧形参数（与 createFountains 保持一致）
+    float arcRadius = 8.0f;
+    float arcAngle = 120.0f;
+
+    // 计算弧形阵列的宽度
+    float halfAngleRad = (arcAngle / 2.0f) * M_PI / 180.0f;
+    float totalWidth = sin(halfAngleRad) * arcRadius * 2.0f;
     float halfWidth = totalWidth / 2.0f;
 
-    // 根据水阀数量计算需要的相机距离
-    // 公式：视野角度45度，tan(22.5°) ≈ 0.414
-    // 所需距离 = 半宽 / tan(视野半角)
-    float requiredDistance = halfWidth / 0.414f;
+    // 根据弧形半径计算需要的相机距离
+    // 需要看到整个弧形，相机距离 = 弧形半径 + 余量
+    float requiredDistance = arcRadius + 4.0f;
 
-    // 加上一些余量，并限制范围
-    float minDistance = 8.0f;
-    float maxDistance = 35.0f;
-    m_cameraDistance = qBound(minDistance, requiredDistance + 2.0f, maxDistance);
+    // 根据水阀数量微调
+    float countFactor = 1.0f + (m_fountainCount - 50) / 200.0f;
+    m_cameraDistance = qBound(10.0f, requiredDistance * countFactor, 25.0f);
 
-    // 根据水阀数量调整相机目标点的Y坐标
-    // 水阀数量多时，相机稍微抬高，看到更多水阀
-    float targetY = 2.5f;
-    if (m_fountainCount > 60) {
-        targetY = 3.0f;
-    }
-    else if (m_fountainCount > 80) {
-        targetY = 3.5f;
-    }
-    m_cameraTarget.setY(targetY);
+    // 相机目标点：弧形中心
+    m_cameraTarget = QVector3D(0.0f, 3.0f, 0.0f);
 
-    // 更新相机位置
+    // 更新相机位置（从正面看向弧形）
     float radX = qDegreesToRadians(m_cameraAngleX);
     float radY = qDegreesToRadians(m_cameraAngleY);
     m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
@@ -106,8 +103,7 @@ void GLWidget::autoAdjustCamera()
     m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
 
     qDebug() << "Camera adjusted - Distance:" << m_cameraDistance
-        << "Target Y:" << targetY
-        << "Total width:" << totalWidth;
+        << "Arc width:" << totalWidth;
 }
 
 void GLWidget::applyConfig()
@@ -134,21 +130,21 @@ void GLWidget::applyConfig()
     m_windStrength = config.getWindStrength();
     m_windDirection = config.getWindDirection();
 
-    // 计算总宽度
-    float totalWidth = m_fountainCount * m_fountainSpacing;
-    m_startX = -totalWidth / 2.0f;
+    // 读取弧形参数
+    m_arcRadius = config.getArcRadius();
+    m_arcAngle = config.getArcAngle();
 
-    // 根据水阀数量自动调整水池大小
-    m_poolWidth = totalWidth + 3.0f;   // 左右各留1.5米边距
-    m_poolDepth = 14.0f;               // 深度固定
+    // 计算水池大小（基于弧形）
+    float halfAngleRad = (m_arcAngle / 2.0f) * M_PI / 180.0f;
+    float arcWidth = sin(halfAngleRad) * m_arcRadius * 2.0f;
+    m_poolWidth = arcWidth + 4.0f;
+    m_poolDepth = m_arcRadius + 3.0f;
 
-    // 自动调整相机位置
+    // 自动调整相机
     autoAdjustCamera();
 
-    qDebug() << "Layout calculated - Count:" << m_fountainCount
-        << "Total width:" << totalWidth
-        << "Pool width:" << m_poolWidth
-        << "Camera distance:" << m_cameraDistance;
+    qDebug() << "Arc layout - Radius:" << m_arcRadius << "Angle:" << m_arcAngle;
+    qDebug() << "Arc width:" << arcWidth << "Pool size:" << m_poolWidth << "x" << m_poolDepth;
 }
 void GLWidget::reloadConfig()
 {
@@ -169,42 +165,12 @@ void GLWidget::reloadConfig()
     update();
     qDebug() << "Configuration reloaded, fountain count:" << m_fountainCount;
 }
-void GLWidget::createFountains()
-{
-    m_fountains.clear();
-    m_waterJets.clear();
-
-    // 计算总宽度
-    float totalWidth = m_fountainCount * m_fountainSpacing;
-    m_startX = -totalWidth / 2.0f;
-
-    for (int i = 0; i < m_fountainCount; ++i) {
-        float x = m_startX + i * m_fountainSpacing;
-
-        m_fountains.append({
-            QVector3D(x, m_fountainHeight, 0.0f),
-            12.0f,
-            -0.6f,
-            0.0f,
-            0.0f
-            });
-
-        WaterJetSegment jet;
-        jet.start = QVector3D(x, m_fountainHeight - 0.3f, 0.0f);
-        jet.end = jet.start + QVector3D(0.0f, -m_waterJetLength, 0.0f);
-        jet.width = m_waterJetTopWidth;
-        jet.life = m_waterJetBottomWidth;
-        m_waterJets.append(jet);
-    }
-
-    qDebug() << "Created" << m_fountainCount << "water valves";
-    qDebug() << "Start X:" << m_startX << "End X:" << (m_startX + totalWidth);
-}
 void GLWidget::createParticle(int fountainId)
 {
     if (m_particles.size() >= MAX_PARTICLES) return;
 
     const auto& jet = m_waterJets[fountainId];
+    const auto& fountain = m_fountains[fountainId];
 
     Particle p;
     p.life = randomRange(m_particleMinLife, m_particleMaxLife);
@@ -215,7 +181,9 @@ void GLWidget::createParticle(int fountainId)
         randomRange(-0.1f, 0.1f)
     );
 
-    p.vel = QVector3D(
+    // 水珠速度：沿水柱方向加上随机扩散
+    QVector3D jetDir = (jet.end - jet.start).normalized();
+    p.vel = jetDir * 2.0f + QVector3D(
         randomRange(-m_particleSpeedX, m_particleSpeedX),
         randomRange(m_particleSpeedYMin, m_particleSpeedYMax),
         randomRange(-m_particleSpeedZ, m_particleSpeedZ)
@@ -258,7 +226,52 @@ void GLWidget::initializeGL()
     m_lastTime = 0;
     m_timerId = startTimer(16);
 }
+void GLWidget::createFountains()
+{
+    m_fountains.clear();
+    m_waterJets.clear();
 
+    // 弧形参数
+    float arcRadius = 8.0f;           // 弧形半径
+    float arcAngle = 120.0f;          // 弧形角度（度）
+    float startAngle = -arcAngle / 2.0f;  // 起始角度
+    float endAngle = arcAngle / 2.0f;     // 结束角度
+
+    for (int i = 0; i < m_fountainCount; ++i) {
+        // 计算当前水阀的角度位置（弧度）
+        float t = (float)i / (m_fountainCount - 1);
+        float angleDeg = startAngle + t * arcAngle;
+        float angleRad = angleDeg * M_PI / 180.0f;
+
+        // 计算弧形上的位置
+        float x = sin(angleRad) * arcRadius;
+        float z = cos(angleRad) * arcRadius;
+
+        // 水阀朝向：指向弧形中心
+        float directionAngle = atan2(-x, -z);
+
+        m_fountains.append({
+            QVector3D(x, m_fountainHeight, z),
+            12.0f,
+            -0.6f,                    // 向下喷射
+            directionAngle,           // 指向中心
+            0.0f
+            });
+
+        WaterJetSegment jet;
+        jet.start = QVector3D(x, m_fountainHeight - 0.3f, z);
+        jet.end = jet.start + QVector3D(0.0f, -m_waterJetLength, 0.0f);
+        jet.width = m_waterJetTopWidth;
+        jet.life = m_waterJetBottomWidth;
+        m_waterJets.append(jet);
+    }
+
+    // 根据弧形半径调整相机距离
+    autoAdjustCamera();
+
+    qDebug() << "Created" << m_fountainCount << "water valves in an arc";
+    qDebug() << "Arc radius:" << arcRadius << "Arc angle:" << arcAngle << "degrees";
+}
 void GLWidget::setupShaders()
 {
     // 粒子着色器
@@ -517,23 +530,26 @@ void GLWidget::updateWaterJets(float dt)
         auto& jet = m_waterJets[i];
         const auto& fountain = m_fountains[i];
 
+        // 水柱起始点
         jet.start = QVector3D(fountain.position.x(), fountain.position.y() - 0.3f, fountain.position.z());
 
+        // 水柱长度变化
         float freq = 0.3f + (i % 7) * 0.05f;
         float phase = i * 0.5f;
         float variation = sin(timeOffset * freq + phase) * 0.45f;
-
         float length = m_waterJetLength + variation;
 
+        // 水柱垂直向下（自由落体方向）
         jet.end = jet.start + QVector3D(0.0f, -length, 0.0f);
         jet.width = m_waterJetTopWidth;
         jet.life = m_waterJetBottomWidth;
 
+        // 轻微摆动（模拟风力）
         float sway = sin(timeOffset * 1.5f + i * 0.2f) * 0.02f;
         jet.end.setX(jet.end.x() + sway);
+        jet.end.setZ(jet.end.z() + sway);
     }
 }
-
 void GLWidget::updateParticles(float dt)
 {
     dt = qMin(dt, 0.033f);
