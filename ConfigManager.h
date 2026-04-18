@@ -61,12 +61,21 @@ public:
     void setArcRadius(float radius) { m_arcRadius = radius; }
     void setArcAngle(float angle) { m_arcAngle = angle; }
 
+    float getArchWidth() const { return m_archWidth; }
+    float getArchHeight() const { return m_archHeight; }
+
+    // 添加设置函数
+    void setArchWidth(float width) { m_archWidth = width; }
+    void setArchHeight(float height) { m_archHeight = height; }
+
 private:
     ConfigManager() = default;
     // 在 private 成员中添加
     bool m_autoScale = true;
     float m_arcRadius = 8.0f;
     float m_arcAngle = 120.0f;
+    float m_archWidth = 16.0f;
+    float m_archHeight = 3.0f;
     // 水阀参数
     int m_fountainCount = 50;
     float m_fountainSpacing = 0.35f;

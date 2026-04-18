@@ -1,8 +1,8 @@
 {
-  "fountainCount": 50,
+  "fountainCount": 450,
   "fountainSpacing": 0.35,
-  "arcRadius": 8.0,
-  "arcAngle": 120.0,
+  "archWidth": 16.0,
+  "archHeight": 3.0,
   "fountainHeight": 5.5,
   "waterJetLength": 2.2,
   "waterJetTopWidth": 0.08,
@@ -22,6 +22,5 @@
   "waterColor": [ 0.2, 0.65, 0.95 ],
   "waterAlpha": 0.65,
   "windStrength": 0.5,
-  "windDirection": 0.3,
-  "autoScale": true
+  "windDirection": 0.3
 }
