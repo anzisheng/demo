@@ -12,6 +12,8 @@ qt_add_executable(ParticleFountain
     MainWindow.cpp
     GLWidget.cpp
     ConfigManager.cpp
+    FountainDesigner.cpp
+    FountainFile.cpp
 )
 
 target_link_libraries(ParticleFountain
@@ -22,11 +24,14 @@ target_link_libraries(ParticleFountain
     Qt6::OpenGLWidgets
 )
 
-# 简单的文件复制（不使用 add_custom_command）
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/FountainConfig.json")
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/FountainConfig.json"
-        "${CMAKE_CURRENT_BINARY_DIR}/FountainConfig.json"
-        COPYONLY
+# 复制配置文件
+set(CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/FountainConfig.json")
+if(EXISTS "${CONFIG_FILE}")
+    add_custom_command(
+        TARGET ParticleFountain POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CONFIG_FILE}"
+            "$<TARGET_FILE_DIR:ParticleFountain>/FountainConfig.json"
+        COMMENT "Copying FountainConfig.json to output directory"
     )
 endif()

@@ -7,6 +7,8 @@
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QTimer>  // 添加这行
+
 
 const float GLWidget::GROUND_Y = -1.0f;
 
@@ -160,6 +162,11 @@ void GLWidget::createParticle(int fountainId)
 {
     if (m_particles.size() >= MAX_PARTICLES) return;
 
+    // 确保 fountainId 有效
+    if (fountainId < 0 || fountainId >= m_waterJets.size()) {
+        return;
+    }
+
     const auto& jet = m_waterJets[fountainId];
 
     Particle p;
@@ -171,22 +178,20 @@ void GLWidget::createParticle(int fountainId)
         randomRange(-0.1f, 0.1f)
     );
 
-    // 水珠速度：垂直向下为主，加随机水平扩散
     p.vel = QVector3D(
-        randomRange(-m_particleSpeedX, m_particleSpeedX),  // 水平随机
-        randomRange(m_particleSpeedYMin, m_particleSpeedYMax),  // 向下速度
-        randomRange(-m_particleSpeedZ, m_particleSpeedZ)   // 水平随机
+        randomRange(-m_particleSpeedX, m_particleSpeedX),
+        randomRange(m_particleSpeedYMin, m_particleSpeedYMax),
+        randomRange(-m_particleSpeedZ, m_particleSpeedZ)
     );
 
     p.acc = QVector3D(0.0f, ConfigManager::getInstance().getGravity(), 0.0f);
 
     m_particles.append(p);
 }
-
 void GLWidget::initializeGL()
 {
     initializeOpenGLFunctions();
-
+    m_initialized = true;
     qDebug() << "OpenGL Version:" << glGetString(GL_VERSION);
 
     setupShaders();
@@ -545,12 +550,23 @@ void GLWidget::updateParticles(float dt)
 {
     dt = qMin(dt, 0.033f);
 
-    // 使用动态边界
-    float boundaryX = m_poolWidth / 2.0f + 1.0f;
-    float boundaryZ = m_poolDepth / 2.0f + 1.0f;
+    // 生成新粒子
+    m_spawnTimer += dt;
+    while (m_spawnTimer >= m_spawnRate && m_particles.size() < MAX_PARTICLES - 100) {
+        m_spawnTimer -= m_spawnRate;
 
-    // ... 粒子生成代码 ...
+        int particlesToCreate = QRandomGenerator::global()->bounded(2, 4);
+        for (int k = 0; k < particlesToCreate; ++k) {
+            if (m_waterJets.size() == 0) break;
+            int fountainId = QRandomGenerator::global()->bounded(m_waterJets.size());
+            const auto& jet = m_waterJets[fountainId];
+            if ((jet.start - jet.end).length() > 0.3f) {
+                createParticle(fountainId);
+            }
+        }
+    }
 
+    // 更新粒子
     for (int i = 0; i < m_particles.size(); ++i) {
         auto& p = m_particles[i];
 
@@ -565,9 +581,8 @@ void GLWidget::updateParticles(float dt)
             continue;
         }
 
-        // 使用动态边界
-        if (fabs(p.pos.x()) > boundaryX ||
-            fabs(p.pos.z()) > boundaryZ ||
+        if (fabs(p.pos.x()) > m_poolWidth / 2 + 1.0f ||
+            fabs(p.pos.z()) > m_poolDepth / 2 + 1.0f ||
             p.life <= 0.0f) {
             m_particles.removeAt(i);
             i--;
@@ -770,4 +785,66 @@ void GLWidget::keyPressEvent(QKeyEvent* event)
         qDebug() << "Cleared particles";
         break;
     }
+}
+void GLWidget::updateFountainsFromData(const QVector<FountainData>& fountains)
+{
+    // 确保 OpenGL 已经初始化
+    if (!isValid()) {
+        qDebug() << "OpenGL not ready, deferring update";
+        // 延迟执行
+        QTimer::singleShot(100, this, [this, fountains]() {
+            updateFountainsFromData(fountains);
+            });
+        return;
+    }
+
+    makeCurrent();
+
+    // 清除现有数据
+    m_fountains.clear();
+    m_waterJets.clear();
+    m_particles.clear();
+
+    // 重新创建喷泉和水柱
+    for (const auto& fd : fountains) {
+        if (!fd.enabled) continue;
+
+        // 创建喷泉信息
+        FountainInfo info;
+        info.position = fd.position;
+        info.sprayStrength = 12.0f;
+        info.sprayAngle = fd.sprayAngle * M_PI / 180.0f;
+        info.sprayDirection = 0.0f;
+        info.rotationAngle = 0.0f;
+        m_fountains.append(info);
+
+        // 创建水柱
+        WaterJetSegment jet;
+        jet.start = QVector3D(fd.position.x(), fd.position.y() - 0.3f, fd.position.z());
+        jet.end = jet.start + QVector3D(0.0f, -fd.height, 0.0f);
+        jet.width = m_waterJetTopWidth * fd.waterFlow;
+        jet.life = m_waterJetBottomWidth * fd.waterFlow;
+        m_waterJets.append(jet);
+    }
+
+    // 重新创建缓冲区
+    if (m_fountains.size() > 0) {
+        setupBuffers();
+    }
+
+    // 创建初始粒子
+    for (int i = 0; i < qMin(200, m_waterJets.size() * 4); ++i) {
+        if (m_waterJets.size() > 0) {
+            int fountainId = QRandomGenerator::global()->bounded(m_waterJets.size());
+            createParticle(fountainId);
+        }
+    }
+
+    // 更新相机位置
+    autoAdjustCamera();
+
+    update();
+    doneCurrent();
+
+    qDebug() << "Updated fountains:" << m_fountains.size();
 }

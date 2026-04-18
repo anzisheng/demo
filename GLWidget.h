@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QElapsedTimer>
 #include <QMatrix4x4>
+#include "FountainData.h"  // 添加这行
 
 struct Particle {
     QVector3D pos;
@@ -36,8 +37,11 @@ class GLWidget : public QOpenGLWidget, protected QOpenGLFunctions_4_5_Core
 public:
     explicit GLWidget(QWidget* parent = nullptr);
     ~GLWidget();
+    // 在 public 部分添加
+    void updateFountainsFromData(const QVector<FountainData>& fountains);
 
     void reloadConfig();
+    bool isOpenGLReady() const { return m_initialized; }
 
 protected:
     void initializeGL() override;
@@ -58,6 +62,7 @@ private:
     void createFountains();
     void createParticle(int fountainId);
     void applyConfig();
+    bool m_initialized = false;
     // 在 private 部分添加
     void autoAdjustCamera();
     // 相机控制
