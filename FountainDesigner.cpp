@@ -7,7 +7,18 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <cmath>
-
+#include "FountainDesigner.h"
+#include "FountainFile.h"
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGroupBox>
+#include <QHeaderView>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QSlider>
+#include <QFileInfo>
+#include <cmath>
+#include "MusicPlayer.h"
 FountainDesigner::FountainDesigner(GLWidget* glWidget, QWidget* parent)
     : QWidget(parent)
     , m_glWidget(glWidget)
@@ -148,6 +159,86 @@ void FountainDesigner::setupUI()
 
     // 初始示例数据
     onGenerateArch();
+    // 音乐控制面板
+    QGroupBox* musicGroup = new QGroupBox("音乐播放器");
+    QVBoxLayout* musicLayout = new QVBoxLayout();
+
+    // 文件选择
+    QHBoxLayout* fileLayout = new QHBoxLayout();
+    QPushButton* selectFileBtn = new QPushButton("选择音乐文件");
+    QLabel* musicNameLabel = new QLabel("未选择音乐");
+    fileLayout->addWidget(selectFileBtn);
+    fileLayout->addWidget(musicNameLabel);
+
+    // 播放控制
+    QHBoxLayout* controlLayout = new QHBoxLayout();
+    QPushButton* playBtn = new QPushButton("播放");
+    QPushButton* pauseBtn = new QPushButton("暂停");
+    QPushButton* stopBtn = new QPushButton("停止");
+    QPushButton* syncEnableBtn = new QPushButton("音乐同步");
+    syncEnableBtn->setCheckable(true);
+    syncEnableBtn->setChecked(false);
+    QDoubleSpinBox* sensitivitySpin = new QDoubleSpinBox();
+    sensitivitySpin->setRange(0.3, 2.5);
+    sensitivitySpin->setValue(1.0);
+    sensitivitySpin->setSingleStep(0.1);
+    controlLayout->addWidget(playBtn);
+    controlLayout->addWidget(pauseBtn);
+    controlLayout->addWidget(stopBtn);
+    controlLayout->addWidget(syncEnableBtn);
+    controlLayout->addWidget(new QLabel("灵敏度:"));
+    controlLayout->addWidget(sensitivitySpin);
+
+    // 音量控制
+    QHBoxLayout* volumeLayout = new QHBoxLayout();
+    QSlider* volumeSlider = new QSlider(Qt::Horizontal);
+    volumeSlider->setRange(0, 100);
+    volumeSlider->setValue(70);
+    volumeLayout->addWidget(new QLabel("音量:"));
+    volumeLayout->addWidget(volumeSlider);
+
+    musicLayout->addLayout(fileLayout);
+    musicLayout->addLayout(controlLayout);
+    musicLayout->addLayout(volumeLayout);
+    musicGroup->setLayout(musicLayout);
+    mainLayout->addWidget(musicGroup);
+
+    // 连接信号
+    connect(selectFileBtn, &QPushButton::clicked, [this, musicNameLabel]() {
+        QString filePath = QFileDialog::getOpenFileName(this, "选择音乐文件", "",
+            "音频文件 (*.mp3 *.wav *.flac *.ogg);;所有文件 (*)");
+        if (!filePath.isEmpty() && m_glWidget) {
+            m_glWidget->loadMusicFile(filePath);
+            musicNameLabel->setText(QFileInfo(filePath).fileName());
+        }
+        });
+
+    connect(playBtn, &QPushButton::clicked, [this]() {
+        if (m_glWidget) m_glWidget->playMusic();
+        });
+
+    connect(pauseBtn, &QPushButton::clicked, [this]() {
+        if (m_glWidget) m_glWidget->pauseMusic();
+        });
+
+    connect(stopBtn, &QPushButton::clicked, [this]() {
+        if (m_glWidget) m_glWidget->stopMusic();
+        });
+
+    connect(syncEnableBtn, &QPushButton::toggled, [this](bool checked) {
+        if (m_glWidget) m_glWidget->setMusicSyncEnabled(checked);
+        });
+
+    connect(sensitivitySpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+        [this](double value) {
+            if (m_glWidget) m_glWidget->setMusicSensitivity((float)value);
+        });
+
+    connect(volumeSlider, &QSlider::valueChanged, [](int value) {
+        MusicPlayer::getInstance().setVolume(value);
+        });
+
+
 }
 
 void FountainDesigner::loadFountains(const QVector<FountainData>& fountains)

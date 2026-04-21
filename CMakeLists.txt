@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets Multimedia)
 
 qt_add_executable(ParticleFountain
     main.cpp
@@ -14,6 +14,7 @@ qt_add_executable(ParticleFountain
     ConfigManager.cpp
     FountainDesigner.cpp
     FountainFile.cpp
+    MusicPlayer.cpp
 )
 
 target_link_libraries(ParticleFountain
@@ -22,6 +23,7 @@ target_link_libraries(ParticleFountain
     Qt6::Widgets
     Qt6::OpenGL
     Qt6::OpenGLWidgets
+    Qt6::Multimedia
 )
 
 # ∏¥÷∆≈‰÷√Œƒº˛

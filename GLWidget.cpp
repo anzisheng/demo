@@ -1,5 +1,6 @@
 #include "GLWidget.h"
 #include "ConfigManager.h"
+#include "MusicPlayer.h"
 #include <QMatrix4x4>
 #include <QRandomGenerator>
 #include <QDebug>
@@ -7,7 +8,8 @@
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QKeyEvent>
-#include <QTimer>  // 添加这行
+#include <QTimer>
+#include <QFileDialog>
 
 
 const float GLWidget::GROUND_Y = -1.0f;
@@ -51,6 +53,8 @@ GLWidget::GLWidget(QWidget* parent)
     , m_timerId(0)
     , m_arcRadius(8.0f)
     , m_arcAngle(120.0f)
+    , m_musicSyncEnabled(false)
+    , m_musicSensitivity(1.0f)
 {
     ConfigManager::getInstance().loadConfig();
     applyConfig();
@@ -62,6 +66,39 @@ GLWidget::GLWidget(QWidget* parent)
     m_waterJets.reserve(m_fountainCount);
     createFountains();
 }
+
+// 添加音乐控制函数实现
+void GLWidget::setMusicSyncEnabled(bool enabled)
+{
+    m_musicSyncEnabled = enabled;
+    qDebug() << "Music sync:" << (enabled ? "ON" : "OFF");
+}
+
+void GLWidget::setMusicSensitivity(float sensitivity)
+{
+    m_musicSensitivity = qBound(0.3f, sensitivity, 2.5f);
+}
+
+void GLWidget::loadMusicFile(const QString& filePath)
+{
+    MusicPlayer::getInstance().loadMusic(filePath);
+}
+
+void GLWidget::playMusic()
+{
+    MusicPlayer::getInstance().play();
+}
+
+void GLWidget::pauseMusic()
+{
+    MusicPlayer::getInstance().pause();
+}
+
+void GLWidget::stopMusic()
+{
+    MusicPlayer::getInstance().stop();
+}
+
 
 GLWidget::~GLWidget()
 {
@@ -522,26 +559,39 @@ void GLWidget::updateWaterJets(float dt)
     static float timeOffset = 0.0f;
     timeOffset += dt;
 
+    // 获取音频数据
+    auto& music = MusicPlayer::getInstance();
+    float beatStrength = music.getBeatStrength();
+    float bassLevel = music.getBassLevel();
+
     for (int i = 0; i < m_waterJets.size(); ++i) {
         auto& jet = m_waterJets[i];
         const auto& fountain = m_fountains[i];
 
-        // 水柱起始点
         jet.start = QVector3D(fountain.position.x(), fountain.position.y() - 0.3f, fountain.position.z());
 
-        // 水柱长度变化
-        float freq = 0.3f + (i % 7) * 0.05f;
-        float phase = i * 0.5f;
-        float variation = sin(timeOffset * freq + phase) * 0.45f;
-        float length = m_waterJetLength + variation;
+        // 基础长度
+        float length = m_waterJetLength;
 
-        // 水柱垂直向下
+        // 音乐同步：水柱长度随音乐变化
+        if (m_musicSyncEnabled) {
+            // 音频因子：节拍影响 + 低音影响
+            float audioFactor = 0.7f + (beatStrength * 0.5f + bassLevel * 0.3f) * m_musicSensitivity;
+            audioFactor = std::min(1.5f, audioFactor);
+            length = m_waterJetLength * audioFactor;
+        }
+
+        // 轻微的自然波动
+        float freq = 0.2f + (i % 7) * 0.03f;
+        float phase = i * 0.5f;
+        length += sin(timeOffset * freq + phase) * 0.15f;
+
         jet.end = jet.start + QVector3D(0.0f, -length, 0.0f);
         jet.width = m_waterJetTopWidth;
         jet.life = m_waterJetBottomWidth;
 
         // 轻微摆动
-        float sway = sin(timeOffset * 1.5f + i * 0.2f) * 0.02f;
+        float sway = sin(timeOffset * 1.2f + i * 0.2f) * 0.01f;
         jet.end.setX(jet.end.x() + sway);
         jet.end.setZ(jet.end.z() + sway);
     }

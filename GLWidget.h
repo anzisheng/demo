@@ -42,6 +42,12 @@ public:
 
     void reloadConfig();
     bool isOpenGLReady() const { return m_initialized; }
+    void setMusicSyncEnabled(bool enabled);
+    void setMusicSensitivity(float sensitivity);
+    void loadMusicFile(const QString& filePath);
+    void playMusic();
+    void pauseMusic();
+    void stopMusic();
 
 protected:
     void initializeGL() override;
@@ -63,6 +69,8 @@ private:
     void createParticle(int fountainId);
     void applyConfig();
     bool m_initialized = false;
+    bool m_musicSyncEnabled = false;
+    float m_musicSensitivity = 1.0f;
     // 在 private 部分添加
     void autoAdjustCamera();
     // 相机控制
