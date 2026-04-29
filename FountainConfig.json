@@ -1,6 +1,5 @@
 {
-  "waterValveGridWidth": 40,
-  "waterValveGridHeight": 25,
+  "waterValveCount": 1000,
   "waterValveSpacing": 0.35,
   "waterValveImagePath": "./valve_image.bmp",
   "waterValveBaseHeight": -0.5,

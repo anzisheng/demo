@@ -49,7 +49,6 @@ public:
 private:
     ConfigManager() = default;
 
-    // 水阀阵列
     int m_waterValveGridWidth = 40;
     int m_waterValveGridHeight = 25;
     float m_waterValveSpacing = 0.35f;
@@ -57,13 +56,11 @@ private:
     float m_waterValveBaseHeight = -0.5f;
     float m_waterValveMaxLength = 1.5f;
 
-    // 水帘
     float m_curtainWidth = 12.0f;
     float m_curtainHeight = 6.0f;
     QString m_curtainImagePath = "./resources/";
     float m_curtainFallDuration = 4.0f;
 
-    // 粒子
     float m_spawnRate = 0.012f;
     float m_particleMinSize = 0.04f;
     float m_particleMaxSize = 0.07f;
@@ -75,13 +72,11 @@ private:
     float m_particleSpeedZ = 1.2f;
     float m_gravity = -9.8f;
 
-    // 水池
     float m_poolWidth = 18.0f;
     float m_poolDepth = 12.0f;
     QVector3D m_waterColor = QVector3D(0.2f, 0.65f, 0.95f);
     float m_waterAlpha = 0.65f;
 
-    // 风
     float m_windStrength = 0.5f;
     float m_windDirection = 0.3f;
 };

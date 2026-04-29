@@ -114,7 +114,13 @@ void GLWidget::initializeGL()
     setupShaders();
     setupBuffers();
 
-    loadValveControlImage(ConfigManager::getInstance().getWaterValveImagePath());
+    // 强制所有阀门启用，形成直线水墙
+    int total = m_valveGridWidth * m_valveGridHeight;
+    m_valveStates.resize(total);
+    for (int i = 0; i < total; ++i) {
+        m_valveStates[i] = { true, 1.0f };
+    }
+
     createValveGrid();
     initCurtain();
 
@@ -127,34 +133,6 @@ void GLWidget::initializeGL()
     m_elapsedTimer.start();
     m_lastTime = 0;
     m_timerId = startTimer(16);
-}
-
-void GLWidget::loadValveControlImage(const QString& filePath)
-{
-    QImage img;
-    if (!img.load(filePath)) {
-        qDebug() << "Failed to load valve image:" << filePath << ", using default all on";
-        int total = m_valveGridWidth * m_valveGridHeight;
-        m_valveStates.resize(total);
-        for (int i = 0; i < total; ++i) m_valveStates[i] = { true, 1.0f };
-        return;
-    }
-    img = img.scaled(m_valveGridWidth, m_valveGridHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    int total = m_valveGridWidth * m_valveGridHeight;
-    m_valveStates.resize(total);
-    for (int y = 0; y < m_valveGridHeight; ++y) {
-        for (int x = 0; x < m_valveGridWidth; ++x) {
-            QRgb pix = img.pixel(x, y);
-            float brightness = (qRed(pix) + qGreen(pix) + qBlue(pix)) / (3.0f * 255.0f);
-            bool enabled = brightness > 0.5f;
-            float intensity = enabled ? brightness : 0.0f;
-            m_valveStates[y * m_valveGridWidth + x] = { enabled, intensity };
-        }
-    }
-    int active = std::count_if(m_valveStates.begin(), m_valveStates.end(),
-        [](const ValveState& s) { return s.enabled; });
-    qDebug() << "Valve image loaded:" << m_valveGridWidth << "x" << m_valveGridHeight
-        << ", active valves:" << active;
 }
 
 void GLWidget::createValveGrid()
@@ -177,14 +155,17 @@ void GLWidget::createValveGrid()
             FountainInfo info;
             info.position = QVector3D(x, m_valveBaseHeight, z);
             info.sprayStrength = 12.0f;
-            info.sprayAngle = 85.0f * M_PI / 180.0f;
+            info.sprayAngle = 85.0f * M_PI / 180.0f; // 几乎垂直向上，但水柱向下？喷射方向需要调整
+            // 为了向下流水，我们让水柱竖直向下
+            info.sprayAngle = -85.0f * M_PI / 180.0f; // 向下喷射
             info.sprayDirection = 0.0f;
             info.rotationAngle = 0.0f;
             m_fountains.append(info);
 
             WaterJetSegment jet;
             jet.start = QVector3D(x, m_valveBaseHeight + 0.2f, z);
-            jet.end = jet.start + QVector3D(0.0f, m_valveMaxLength, 0.0f);
+            // 水柱向下延伸
+            jet.end = jet.start + QVector3D(0.0f, -m_valveMaxLength, 0.0f);
             jet.width = 0.06f;
             jet.life = 0.02f;
             m_waterJets.append(jet);
@@ -216,7 +197,8 @@ void GLWidget::updateValveWaterJets(float dt)
             length += sin(timeOffset * 2.5f + jetIdx) * 0.05f;
             if (length < 0.05f) length = 0.0f;
 
-            jet.end = jet.start + QVector3D(0.0f, length, 0.0f);
+            // 向下延伸
+            jet.end = jet.start + QVector3D(0.0f, -length, 0.0f);
             jet.width = 0.06f * (0.5f + m_valveStates[idx].intensity * 0.5f);
             jet.life = 0.02f;
             jetIdx++;
@@ -234,6 +216,7 @@ void GLWidget::createParticle(int fountainId)
     Particle p;
     p.life = randomRange(m_particleMinLife, m_particleMaxLife);
     p.size = randomRange(m_particleMinSize, m_particleMaxSize);
+    // 粒子从水柱末端产生
     p.pos = jet.end + QVector3D(randomRange(-0.08f, 0.08f), -0.05f, randomRange(-0.08f, 0.08f));
     p.vel = QVector3D(randomRange(-m_particleSpeedX, m_particleSpeedX),
         randomRange(m_particleSpeedYMin, m_particleSpeedYMax),
@@ -275,7 +258,6 @@ void GLWidget::updateParticles(float dt)
     }
 }
 
-// ---------- 水帘 ----------
 void GLWidget::initCurtain()
 {
     auto& config = ConfigManager::getInstance();
@@ -334,7 +316,6 @@ void GLWidget::renderCurtain(const QMatrix4x4& mvp)
     m_curtainProgram.release();
 }
 
-// ---------- OpenGL 管线 ----------
 void GLWidget::setupShaders()
 {
     const char* particleVS = R"(
@@ -458,7 +439,6 @@ void GLWidget::setupShaders()
 
 void GLWidget::setupBuffers()
 {
-    // 粒子
     glGenVertexArrays(1, &m_particleVAO);
     glBindVertexArray(m_particleVAO);
     glGenBuffers(1, &m_particleVBO);
@@ -469,7 +449,6 @@ void GLWidget::setupBuffers()
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    // 水柱
     glGenVertexArrays(1, &m_jetVAO);
     glBindVertexArray(m_jetVAO);
     glGenBuffers(1, &m_jetVBO);
@@ -480,7 +459,6 @@ void GLWidget::setupBuffers()
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    // 水池平面
     float y = -1.05f;
     float poolVerts[] = {
         -m_poolWidth / 2, y, -m_poolDepth / 2, 0,0,
@@ -500,7 +478,6 @@ void GLWidget::setupBuffers()
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    // 水帘平面
     float halfW = m_curtain.width / 2.0f;
     float halfH = m_curtain.height / 2.0f;
     float yb = m_curtain.position.y();
@@ -549,7 +526,6 @@ void GLWidget::paintGL()
     view.lookAt(m_cameraPos, m_cameraTarget, QVector3D(0, 1, 0));
     QMatrix4x4 mvp = m_projection * view;
 
-    // 水池
     m_poolProgram.bind();
     m_poolProgram.setUniformValue(m_uniformMVP, mvp);
     glBindVertexArray(m_poolVAO);
@@ -557,10 +533,8 @@ void GLWidget::paintGL()
     glBindVertexArray(0);
     m_poolProgram.release();
 
-    // 水帘
     renderCurtain(mvp);
 
-    // 水柱
     if (!m_waterJets.empty()) {
         std::vector<float> jetVerts;
         for (const auto& jet : m_waterJets) {
@@ -585,7 +559,6 @@ void GLWidget::paintGL()
         m_jetProgram.release();
     }
 
-    // 粒子
     if (!m_particles.empty()) {
         std::vector<float> pVerts;
         for (const auto& p : m_particles) {
@@ -618,10 +591,7 @@ void GLWidget::resizeGL(int w, int h)
     m_projection.perspective(45.0f, aspect, 0.1f, 100.0f);
 }
 
-void GLWidget::timerEvent(QTimerEvent*)
-{
-    update();
-}
+void GLWidget::timerEvent(QTimerEvent*) { update(); }
 
 void GLWidget::wheelEvent(QWheelEvent* event)
 {
