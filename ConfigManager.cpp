@@ -69,6 +69,20 @@ bool ConfigManager::loadConfig(const QString& filePath)
     if (obj.contains("windStrength")) m_windStrength = obj["windStrength"].toDouble();
     if (obj.contains("windDirection")) m_windDirection = obj["windDirection"].toDouble();
 
+    // 弧形参数
+    if (obj.contains("arcRadius")) m_arcRadius = obj["arcRadius"].toDouble();
+    if (obj.contains("arcAngle")) m_arcAngle = obj["arcAngle"].toDouble();
+
+    // 水帘参数
+    if (obj.contains("curtainWidth")) m_curtainWidth = obj["curtainWidth"].toDouble();
+    if (obj.contains("curtainHeight")) m_curtainHeight = obj["curtainHeight"].toDouble();
+    if (obj.contains("curtainImageInterval")) m_curtainImageInterval = obj["curtainImageInterval"].toDouble();
+    if (obj.contains("curtainImagePath")) m_curtainImagePath = obj["curtainImagePath"].toString();
+
+    // 地面喷泉参数
+    if (obj.contains("groundFountainCount")) m_groundFountainCount = obj["groundFountainCount"].toInt();
+    if (obj.contains("groundFountainRadius")) m_groundFountainRadius = obj["groundFountainRadius"].toDouble();
+
     qDebug() << "Config loaded successfully, fountain count:" << m_fountainCount;
     return true;
 }
@@ -77,15 +91,22 @@ void ConfigManager::saveConfig(const QString& filePath)
 {
     QJsonObject obj;
 
+    // 水阀参数
     obj["fountainCount"] = m_fountainCount;
     obj["fountainSpacing"] = m_fountainSpacing;
     obj["startX"] = m_startX;
     obj["fountainHeight"] = m_fountainHeight;
+
+    // 水柱参数
     obj["waterJetLength"] = m_waterJetLength;
     obj["waterJetTopWidth"] = m_waterJetTopWidth;
     obj["waterJetBottomWidth"] = m_waterJetBottomWidth;
+
+    // 物理参数
     obj["gravity"] = m_gravity;
     obj["spawnRate"] = m_spawnRate;
+
+    // 粒子参数
     obj["particleMinSize"] = m_particleMinSize;
     obj["particleMaxSize"] = m_particleMaxSize;
     obj["particleMinLife"] = m_particleMinLife;
@@ -94,17 +115,36 @@ void ConfigManager::saveConfig(const QString& filePath)
     obj["particleSpeedYMin"] = m_particleSpeedYMin;
     obj["particleSpeedYMax"] = m_particleSpeedYMax;
     obj["particleSpeedZ"] = m_particleSpeedZ;
+
+    // 水池参数
     obj["poolWidth"] = m_poolWidth;
     obj["poolDepth"] = m_poolDepth;
 
+    // 视觉参数
     QJsonArray colorArr;
     colorArr.append(m_waterColor.x());
     colorArr.append(m_waterColor.y());
     colorArr.append(m_waterColor.z());
     obj["waterColor"] = colorArr;
     obj["waterAlpha"] = m_waterAlpha;
+
+    // 风参数
     obj["windStrength"] = m_windStrength;
     obj["windDirection"] = m_windDirection;
+
+    // 弧形参数
+    obj["arcRadius"] = m_arcRadius;
+    obj["arcAngle"] = m_arcAngle;
+
+    // 水帘参数
+    obj["curtainWidth"] = m_curtainWidth;
+    obj["curtainHeight"] = m_curtainHeight;
+    obj["curtainImageInterval"] = m_curtainImageInterval;
+    obj["curtainImagePath"] = m_curtainImagePath;
+
+    // 地面喷泉参数
+    obj["groundFountainCount"] = m_groundFountainCount;
+    obj["groundFountainRadius"] = m_groundFountainRadius;
 
     QJsonDocument doc(obj);
     QFile file(filePath);

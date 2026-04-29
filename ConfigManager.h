@@ -10,9 +10,6 @@ public:
 
     bool loadConfig(const QString& filePath = "FountainConfig.json");
     void saveConfig(const QString& filePath = "FountainConfig.json");
-    // 在 ConfigManager 类中添加
-    bool getAutoScale() const { return m_autoScale; }
-    void setAutoScale(bool scale) { m_autoScale = scale; }
 
     // 水阀参数
     int getFountainCount() const { return m_fountainCount; }
@@ -51,31 +48,29 @@ public:
     float getWindStrength() const { return m_windStrength; }
     float getWindDirection() const { return m_windDirection; }
 
-    // 设置参数
+    // 弧形参数
+    float getArcRadius() const { return m_arcRadius; }
+    float getArcAngle() const { return m_arcAngle; }
+
+    // 水帘参数
+    float getCurtainWidth() const { return m_curtainWidth; }
+    float getCurtainHeight() const { return m_curtainHeight; }
+    float getCurtainImageInterval() const { return m_curtainImageInterval; }
+    QString getCurtainImagePath() const { return m_curtainImagePath; }
+
+    // 地面喷泉参数
+    int getGroundFountainCount() const { return m_groundFountainCount; }
+    float getGroundFountainRadius() const { return m_groundFountainRadius; }
+
+    // 设置参数（用于运行时调整）
     void setFountainCount(int count) { m_fountainCount = count; }
     void setSpawnRate(float rate) { m_spawnRate = rate; }
     void setWindStrength(float strength) { m_windStrength = strength; }
     void setWindDirection(float direction) { m_windDirection = direction; }
-    float getArcRadius() const { return m_arcRadius; }
-    float getArcAngle() const { return m_arcAngle; }
-    void setArcRadius(float radius) { m_arcRadius = radius; }
-    void setArcAngle(float angle) { m_arcAngle = angle; }
-
-    float getArchWidth() const { return m_archWidth; }
-    float getArchHeight() const { return m_archHeight; }
-
-    // 添加设置函数
-    void setArchWidth(float width) { m_archWidth = width; }
-    void setArchHeight(float height) { m_archHeight = height; }
 
 private:
     ConfigManager() = default;
-    // 在 private 成员中添加
-    bool m_autoScale = true;
-    float m_arcRadius = 8.0f;
-    float m_arcAngle = 120.0f;
-    float m_archWidth = 16.0f;
-    float m_archHeight = 3.0f;
+
     // 水阀参数
     int m_fountainCount = 50;
     float m_fountainSpacing = 0.35f;
@@ -112,4 +107,18 @@ private:
     // 风参数
     float m_windStrength = 0.5f;
     float m_windDirection = 0.3f;
+
+    // 弧形参数
+    float m_arcRadius = 8.0f;
+    float m_arcAngle = 120.0f;
+
+    // 水帘参数
+    float m_curtainWidth = 12.0f;
+    float m_curtainHeight = 6.0f;
+    float m_curtainImageInterval = 2.0f;
+    QString m_curtainImagePath = "./resources/";
+
+    // 地面喷泉参数
+    int m_groundFountainCount = 30;
+    float m_groundFountainRadius = 4.0f;
 };

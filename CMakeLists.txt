@@ -37,3 +37,6 @@ if(EXISTS "${CONFIG_FILE}")
         COMMENT "Copying FountainConfig.json to output directory"
     )
 endif()
+
+# 复制水帘图片目录（可选，运行时从指定路径读取）
+# 注意：需要在运行时确保 resources 目录在可执行文件所在路径或使用绝对路径

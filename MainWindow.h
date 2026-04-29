@@ -1,6 +1,5 @@
 #pragma once
 #include <QMainWindow>
-#include <QTimer>
 
 class MainWindow : public QMainWindow
 {

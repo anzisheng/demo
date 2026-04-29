@@ -6,7 +6,9 @@
 #include <QVector>
 #include <QElapsedTimer>
 #include <QMatrix4x4>
-#include "FountainData.h"  // 添加这行
+#include <QImage>
+#include <QDir>
+#include "FountainData.h"
 
 struct Particle {
     QVector3D pos;
@@ -37,11 +39,11 @@ class GLWidget : public QOpenGLWidget, protected QOpenGLFunctions_4_5_Core
 public:
     explicit GLWidget(QWidget* parent = nullptr);
     ~GLWidget();
-    // 在 public 部分添加
-    void updateFountainsFromData(const QVector<FountainData>& fountains);
 
     void reloadConfig();
-    bool isOpenGLReady() const { return m_initialized; }
+    void updateFountainsFromData(const QVector<FountainData>& fountains);
+
+    // 音乐同步接口
     void setMusicSyncEnabled(bool enabled);
     void setMusicSensitivity(float sensitivity);
     void loadMusicFile(const QString& filePath);
@@ -61,6 +63,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
+    // 粒子系统
     void updateParticles(float deltaTime);
     void updateWaterJets(float deltaTime);
     void setupBuffers();
@@ -68,11 +71,18 @@ private:
     void createFountains();
     void createParticle(int fountainId);
     void applyConfig();
-    bool m_initialized = false;
-    bool m_musicSyncEnabled = false;
-    float m_musicSensitivity = 1.0f;
-    // 在 private 部分添加
     void autoAdjustCamera();
+
+    // 地面柱状喷泉
+    void setupGroundFountains();
+
+    // 水帘相关
+    void initCurtain();
+    void loadCurtainImages(const QString& folderPath);
+    void updateCurtainTexture();
+    void updateCurtainParticles(float dt);
+    void renderCurtain(const QMatrix4x4& mvp);
+
     // 相机控制
     QMatrix4x4 m_projection;
     QVector3D m_cameraPos;
@@ -83,16 +93,14 @@ private:
     QPoint m_lastMousePos;
     bool m_mousePressed;
 
-    // 在 private 成员中添加
-    float m_arcRadius;
-    float m_arcAngle;
-    // 着色器
+    // 着色器程序
     QOpenGLShaderProgram m_particleProgram;
     QOpenGLShaderProgram m_jetProgram;
     QOpenGLShaderProgram m_valveProgram;
     QOpenGLShaderProgram m_poolProgram;
+    QOpenGLShaderProgram m_curtainProgram;
 
-    // 缓冲区
+    // 缓冲区对象
     GLuint m_particleVAO = 0;
     GLuint m_particleVBO = 0;
     GLuint m_jetVAO = 0;
@@ -100,19 +108,45 @@ private:
     GLuint m_valveVAO = 0;
     GLuint m_poolVAO = 0;
     GLuint m_poolVBO = 0;
+    GLuint m_curtainVAO = 0;
+    GLuint m_curtainVBO = 0;
 
-    // 数据
+    // 数据容器
     QVector<Particle> m_particles;
     QVector<FountainInfo> m_fountains;
     QVector<WaterJetSegment> m_waterJets;
 
+    // 水帘数据结构
+    struct CurtainInfo {
+        QVector3D position;
+        float width;
+        float height;
+        GLuint textureId = 0;
+        QVector<QImage> images;
+        int currentIndex = 0;
+        float timer = 0.0f;
+        float interval = 2.0f;
+    } m_curtain;
+
+    struct CurtainParticle {
+        QVector3D pos;
+        float speedY;
+        float life;
+    };
+    QVector<CurtainParticle> m_curtainParticles;
+
+    // Uniform 位置
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
+    int m_curtainUniformMVP = 0;
+    int m_curtainUniformTex = 0;
+    int m_uniformTexture = 0;
 
+    // 常量
     static const int MAX_PARTICLES = 10000;
     static const float GROUND_Y;
 
-    // 运行时参数
+    // 配置参数
     int m_fountainCount;
     float m_fountainSpacing;
     float m_startX;
@@ -135,10 +169,18 @@ private:
     QVector3D m_waterColor;
     float m_windStrength;
     float m_windDirection;
+    float m_arcRadius;
+    float m_arcAngle;
 
+    // 音乐同步
+    bool m_musicSyncEnabled;
+    float m_musicSensitivity;
+
+    // 运行时
     float m_spawnTimer;
     float m_lastTime;
     int m_timerId;
+    bool m_initialized;
 
     QElapsedTimer m_elapsedTimer;
 };

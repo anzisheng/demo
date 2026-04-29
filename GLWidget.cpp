@@ -9,8 +9,8 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QTimer>
-#include <QFileDialog>
-
+#include <QDir>
+#include <QElapsedTimer>
 
 const float GLWidget::GROUND_Y = -1.0f;
 
@@ -21,7 +21,7 @@ inline float randomRange(float min, float max) {
 GLWidget::GLWidget(QWidget* parent)
     : QOpenGLWidget(parent)
     , m_cameraPos(0.0f, 5.0f, 15.0f)
-    , m_cameraTarget(0.0f, 2.5f, 0.0f)
+    , m_cameraTarget(0.0f, 3.0f, 0.0f)
     , m_cameraDistance(15.0f)
     , m_cameraAngleX(0.0f)
     , m_cameraAngleY(30.0f)
@@ -48,57 +48,23 @@ GLWidget::GLWidget(QWidget* parent)
     , m_waterColor(0.2f, 0.65f, 0.95f)
     , m_windStrength(0.5f)
     , m_windDirection(0.3f)
-    , m_spawnTimer(0.0f)
-    , m_lastTime(0.0f)
-    , m_timerId(0)
     , m_arcRadius(8.0f)
     , m_arcAngle(120.0f)
     , m_musicSyncEnabled(false)
     , m_musicSensitivity(1.0f)
+    , m_spawnTimer(0.0f)
+    , m_lastTime(0.0f)
+    , m_timerId(0)
+    , m_initialized(false)
 {
     ConfigManager::getInstance().loadConfig();
     applyConfig();
-
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
-
     m_particles.reserve(MAX_PARTICLES);
     m_waterJets.reserve(m_fountainCount);
     createFountains();
 }
-
-// 添加音乐控制函数实现
-void GLWidget::setMusicSyncEnabled(bool enabled)
-{
-    m_musicSyncEnabled = enabled;
-    qDebug() << "Music sync:" << (enabled ? "ON" : "OFF");
-}
-
-void GLWidget::setMusicSensitivity(float sensitivity)
-{
-    m_musicSensitivity = qBound(0.3f, sensitivity, 2.5f);
-}
-
-void GLWidget::loadMusicFile(const QString& filePath)
-{
-    MusicPlayer::getInstance().loadMusic(filePath);
-}
-
-void GLWidget::playMusic()
-{
-    MusicPlayer::getInstance().play();
-}
-
-void GLWidget::pauseMusic()
-{
-    MusicPlayer::getInstance().pause();
-}
-
-void GLWidget::stopMusic()
-{
-    MusicPlayer::getInstance().stop();
-}
-
 
 GLWidget::~GLWidget()
 {
@@ -110,40 +76,18 @@ GLWidget::~GLWidget()
     if (m_valveVAO) glDeleteVertexArrays(1, &m_valveVAO);
     if (m_poolVBO) glDeleteBuffers(1, &m_poolVBO);
     if (m_poolVAO) glDeleteVertexArrays(1, &m_poolVAO);
+    if (m_curtainVBO) glDeleteBuffers(1, &m_curtainVBO);
+    if (m_curtainVAO) glDeleteVertexArrays(1, &m_curtainVAO);
+    if (m_curtain.textureId) glDeleteTextures(1, &m_curtain.textureId);
     doneCurrent();
 }
-void GLWidget::autoAdjustCamera()
-{
-    // 拱形参数
-    float archWidth = 16.0f;
-    float archHeight = 3.0f;
 
-    // 计算需要的相机距离
-    float halfWidth = archWidth / 2.0f;
-    float requiredDistance = halfWidth / 0.414f;  // tan(22.5°) ≈ 0.414
-
-    // 加上余量
-    m_cameraDistance = qBound(10.0f, requiredDistance + 2.0f, 25.0f);
-
-    // 相机目标点：拱形中心偏下
-    m_cameraTarget = QVector3D(0.0f, m_fountainHeight + archHeight / 2.0f, 0.0f);
-
-    // 更新相机位置（从正面看向拱形）
-    float radX = qDegreesToRadians(m_cameraAngleX);
-    float radY = qDegreesToRadians(m_cameraAngleY);
-    m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
-    m_cameraPos.setY(m_cameraDistance * sin(radY));
-    m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
-
-    qDebug() << "Camera adjusted - Distance:" << m_cameraDistance
-        << "Target Y:" << m_cameraTarget.y();
-}
 void GLWidget::applyConfig()
 {
     auto& config = ConfigManager::getInstance();
-
     m_fountainCount = config.getFountainCount();
     m_fountainSpacing = config.getFountainSpacing();
+    m_startX = config.getStartX();
     m_fountainHeight = config.getFountainHeight();
     m_waterJetLength = config.getWaterJetLength();
     m_waterJetTopWidth = config.getWaterJetTopWidth();
@@ -157,74 +101,84 @@ void GLWidget::applyConfig()
     m_particleSpeedYMin = config.getParticleSpeedYMin();
     m_particleSpeedYMax = config.getParticleSpeedYMax();
     m_particleSpeedZ = config.getParticleSpeedZ();
+    m_poolWidth = config.getPoolWidth();
+    m_poolDepth = config.getPoolDepth();
     m_waterColor = config.getWaterColor();
     m_waterAlpha = config.getWaterAlpha();
     m_windStrength = config.getWindStrength();
     m_windDirection = config.getWindDirection();
+    m_arcRadius = config.getArcRadius();
+    m_arcAngle = config.getArcAngle();
 
-    // 拱形参数
-    float archWidth = 16.0f;
-    float archHeight = 3.0f;
-
-    // 计算水池大小（基于拱形宽度）
-    m_poolWidth = archWidth + 4.0f;
-    m_poolDepth = 12.0f;
-
-    // 自动调整相机
-    autoAdjustCamera();
-
-    qDebug() << "Arch layout - Width:" << archWidth << "Height:" << archHeight;
-    qDebug() << "Pool size:" << m_poolWidth << "x" << m_poolDepth;
+    // 水帘参数
+    m_curtain.width = config.getCurtainWidth();
+    m_curtain.height = config.getCurtainHeight();
+    m_curtain.interval = config.getCurtainImageInterval();
+    m_curtain.position = QVector3D(0.0f, 1.0f, -4.0f);
 }
+
 void GLWidget::reloadConfig()
 {
     ConfigManager::getInstance().loadConfig();
     applyConfig();
-
     createFountains();
     m_particles.clear();
-
     for (int i = 0; i < qMin(200, m_fountainCount * 4); ++i) {
-        int fountainId = QRandomGenerator::global()->bounded(m_fountainCount);
-        createParticle(fountainId);
+        int id = QRandomGenerator::global()->bounded(m_fountainCount);
+        createParticle(id);
     }
-
-    // 重新设置缓冲区大小
-    setupBuffers();
-
+    // 重新加载水帘图片
+    loadCurtainImages(ConfigManager::getInstance().getCurtainImagePath());
     update();
     qDebug() << "Configuration reloaded, fountain count:" << m_fountainCount;
 }
+
+void GLWidget::createFountains()
+{
+    m_fountains.clear();
+    m_waterJets.clear();
+
+    float totalWidth = m_fountainCount * m_fountainSpacing;
+    float startX = -totalWidth / 2.0f;
+    for (int i = 0; i < m_fountainCount; ++i) {
+        float x = startX + i * m_fountainSpacing;
+        // 抛物线拱形
+        float a = -4.0f * 3.0f / (totalWidth * totalWidth);
+        float yOffset = a * x * x + 3.0f;
+        float valveY = m_fountainHeight + yOffset;
+        m_fountains.append({
+            QVector3D(x, valveY, 0.0f),
+            12.0f,
+            -0.6f,
+            0.0f,
+            0.0f
+            });
+        WaterJetSegment jet;
+        jet.start = QVector3D(x, valveY - 0.3f, 0.0f);
+        jet.end = jet.start + QVector3D(0.0f, -m_waterJetLength, 0.0f);
+        jet.width = m_waterJetTopWidth;
+        jet.life = m_waterJetBottomWidth;
+        m_waterJets.append(jet);
+    }
+    qDebug() << "Created" << m_fountainCount << "water valves (arch)";
+}
+
 void GLWidget::createParticle(int fountainId)
 {
     if (m_particles.size() >= MAX_PARTICLES) return;
-
-    // 确保 fountainId 有效
-    if (fountainId < 0 || fountainId >= m_waterJets.size()) {
-        return;
-    }
-
+    if (fountainId < 0 || fountainId >= m_waterJets.size()) return;
     const auto& jet = m_waterJets[fountainId];
-
     Particle p;
     p.life = randomRange(m_particleMinLife, m_particleMaxLife);
     p.size = randomRange(m_particleMinSize, m_particleMaxSize);
-    p.pos = jet.end + QVector3D(
-        randomRange(-0.1f, 0.1f),
-        -0.05f,
-        randomRange(-0.1f, 0.1f)
-    );
-
-    p.vel = QVector3D(
-        randomRange(-m_particleSpeedX, m_particleSpeedX),
+    p.pos = jet.end + QVector3D(randomRange(-0.1f, 0.1f), -0.05f, randomRange(-0.1f, 0.1f));
+    p.vel = QVector3D(randomRange(-m_particleSpeedX, m_particleSpeedX),
         randomRange(m_particleSpeedYMin, m_particleSpeedYMax),
-        randomRange(-m_particleSpeedZ, m_particleSpeedZ)
-    );
-
+        randomRange(-m_particleSpeedZ, m_particleSpeedZ));
     p.acc = QVector3D(0.0f, ConfigManager::getInstance().getGravity(), 0.0f);
-
     m_particles.append(p);
 }
+
 void GLWidget::initializeGL()
 {
     initializeOpenGLFunctions();
@@ -234,80 +188,95 @@ void GLWidget::initializeGL()
     setupShaders();
     setupBuffers();
 
-    // 初始化粒子
+    // 初始拱形喷泉粒子
     for (int i = 0; i < 200; ++i) {
-        int fountainId = QRandomGenerator::global()->bounded(m_fountainCount);
-        createParticle(fountainId);
+        createParticle(QRandomGenerator::global()->bounded(m_fountainCount));
     }
+
+    // 水帘初始化
+    initCurtain();
+
+    // 地面柱状喷泉
+    setupGroundFountains();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.02f, 0.03f, 0.08f, 1.0f);
 
-    // 自动调整相机（基于水阀数量）
     autoAdjustCamera();
-
-    // 更新投影矩阵
-    float aspect = width() / float(height());
-    m_projection.setToIdentity();
-    m_projection.perspective(45.0f, aspect, 0.1f, 100.0f);
-
     m_elapsedTimer.start();
     m_lastTime = 0;
     m_timerId = startTimer(16);
 }
-void GLWidget::createFountains()
+
+void GLWidget::setupGroundFountains()
 {
+    auto& config = ConfigManager::getInstance();
+    int count = config.getGroundFountainCount();
+    float radius = config.getGroundFountainRadius();
+    QVector<FountainData> fountains;
+    for (int i = 0; i < count; ++i) {
+        float angle = randomRange(0, 2 * M_PI);
+        float r = randomRange(1.5f, radius);
+        float x = cos(angle) * r;
+        float z = sin(angle) * r;
+        FountainData fd;
+        fd.id = i;
+        fd.position = QVector3D(x, -0.5f, z);
+        fd.height = randomRange(1.2f, 2.0f);
+        fd.waterFlow = 0.6f;
+        fd.sprayAngle = 85.0f;  // 向上
+        fd.enabled = true;
+        fountains.append(fd);
+    }
+    updateFountainsFromData(fountains);
+}
+
+void GLWidget::updateFountainsFromData(const QVector<FountainData>& fountains)
+{
+    if (!m_initialized) {
+        QTimer::singleShot(100, this, [this, fountains]() { updateFountainsFromData(fountains); });
+        return;
+    }
+    makeCurrent();
+
     m_fountains.clear();
     m_waterJets.clear();
+    m_particles.clear();
 
-    // 拱形参数
-    float archWidth = 16.0f;      // 拱形宽度
-    float archHeight = 3.0f;      // 拱形高度（弧顶高度）
-    float startX = -archWidth / 2.0f;
-    float endX = archWidth / 2.0f;
-
-    for (int i = 0; i < m_fountainCount; ++i) {
-        // 计算当前水阀的X位置
-        float t = (float)i / (m_fountainCount - 1);
-        float x = startX + t * archWidth;
-
-        // 抛物线公式：y = a * x^2 + c
-        // 当 x = 0 时，y = archHeight（最高点）
-        // 当 x = ±archWidth/2 时，y = 0（两端最低）
-        float a = -4.0f * archHeight / (archWidth * archWidth);
-        float yOffset = a * x * x + archHeight;
-
-        // 水阀位置：X在水平方向，Y随抛物线变化，Z为0
-        float z = 0.0f;
-        float valveY = m_fountainHeight + yOffset;
-
-        m_fountains.append({
-            QVector3D(x, valveY, z),
-            12.0f,
-            -0.6f,                    // 向下喷射
-            0.0f,                     // 方向
-            0.0f
-            });
+    for (const auto& fd : fountains) {
+        if (!fd.enabled) continue;
+        FountainInfo info;
+        info.position = fd.position;
+        info.sprayStrength = 12.0f;
+        info.sprayAngle = fd.sprayAngle * M_PI / 180.0f;
+        info.sprayDirection = 0.0f;
+        info.rotationAngle = 0.0f;
+        m_fountains.append(info);
 
         WaterJetSegment jet;
-        jet.start = QVector3D(x, valveY - 0.3f, z);
-        jet.end = jet.start + QVector3D(0.0f, -m_waterJetLength, 0.0f);
-        jet.width = m_waterJetTopWidth;
-        jet.life = m_waterJetBottomWidth;
+        jet.start = QVector3D(fd.position.x(), fd.position.y() - 0.3f, fd.position.z());
+        jet.end = jet.start + QVector3D(0.0f, -fd.height, 0.0f);
+        jet.width = m_waterJetTopWidth * fd.waterFlow;
+        jet.life = m_waterJetBottomWidth * fd.waterFlow;
         m_waterJets.append(jet);
     }
 
-    // 根据拱形宽度调整相机距离
+    if (m_fountains.size() > 0) setupBuffers();
+    for (int i = 0; i < qMin(200, m_waterJets.size() * 4); ++i) {
+        int id = QRandomGenerator::global()->bounded(m_waterJets.size());
+        createParticle(id);
+    }
     autoAdjustCamera();
-
-    qDebug() << "Created" << m_fountainCount << "water valves in an arch shape";
-    qDebug() << "Arch width:" << archWidth << "Arch height:" << archHeight;
+    update();
+    doneCurrent();
+    qDebug() << "Updated fountains (total):" << m_fountains.size();
 }
+
 void GLWidget::setupShaders()
 {
-    // 粒子着色器
+    // 粒子着色器（同前）
     const char* particleVertexSrc = R"(
         #version 330 core
         layout(location = 0) in vec3 aPos;
@@ -319,7 +288,6 @@ void GLWidget::setupShaders()
             gl_Position = uMVP * vec4(aPos, 1.0);
         }
     )";
-
     const char* particleFragmentSrc = R"(
         #version 330 core
         in vec2 vTexCoord;
@@ -334,7 +302,6 @@ void GLWidget::setupShaders()
             FragColor = vec4(color, alpha);
         }
     )";
-
     // 水柱着色器
     const char* jetVertexSrc = R"(
         #version 330 core
@@ -347,23 +314,21 @@ void GLWidget::setupShaders()
             gl_Position = uMVP * vec4(aPos, 1.0);
         }
     )";
-
     const char* jetFragmentSrc = R"(
         #version 330 core
         in vec2 vTexCoord;
         out vec4 FragColor;
         uniform float uTime;
         void main() {
-            float flow = fract(vTexCoord.y * 6.0 - uTime * 1.5);
-            float stripe = smoothstep(0.2, 0.8, flow) * 0.2;
-            vec3 color = vec3(0.3, 0.75, 1.0);
+            float flow = fract(vTexCoord.y * 5.0 - uTime * 1.2);
+            float stripe = smoothstep(0.3, 0.7, flow) * 0.15;
+            vec3 color = vec3(0.3, 0.72, 0.98);
             color += vec3(0.2, 0.2, 0.15) * stripe;
             float edge = 1.0 - abs(vTexCoord.x - 0.5) * 1.2;
             float alpha = 0.65 * edge;
             FragColor = vec4(color, alpha);
         }
     )";
-
     // 水阀着色器
     const char* valveVertexSrc = R"(
         #version 330 core
@@ -376,7 +341,6 @@ void GLWidget::setupShaders()
             gl_Position = uMVP * vec4(aPos, 1.0);
         }
     )";
-
     const char* valveFragmentSrc = R"(
         #version 330 core
         in vec3 vColor;
@@ -385,7 +349,6 @@ void GLWidget::setupShaders()
             FragColor = vec4(vColor, 1.0);
         }
     )";
-
     // 水池着色器
     const char* poolVertexSrc = R"(
         #version 330 core
@@ -398,8 +361,7 @@ void GLWidget::setupShaders()
             gl_Position = uMVP * vec4(aPos, 1.0);
         }
     )";
-
-    QString poolFragmentSrc = QString(R"(
+    QString poolFrag = QString(R"(
         #version 330 core
         in vec2 vTexCoord;
         out vec4 FragColor;
@@ -410,6 +372,29 @@ void GLWidget::setupShaders()
         }
     )").arg(m_waterColor.x()).arg(m_waterColor.y()).arg(m_waterColor.z()).arg(m_waterAlpha);
 
+    // 水帘着色器
+    const char* curtainVertexSrc = R"(
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec2 aTexCoord;
+        out vec2 vTexCoord;
+        uniform mat4 uMVP;
+        void main() {
+            vTexCoord = aTexCoord;
+            gl_Position = uMVP * vec4(aPos, 1.0);
+        }
+    )";
+    const char* curtainFragSrc = R"(
+        #version 330 core
+        in vec2 vTexCoord;
+        out vec4 FragColor;
+        uniform sampler2D uTexture;
+        void main() {
+            FragColor = texture(uTexture, vTexCoord);
+        }
+    )";
+
+    // 编译链接
     m_particleProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, particleVertexSrc);
     m_particleProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, particleFragmentSrc);
     m_particleProgram.link();
@@ -423,63 +408,51 @@ void GLWidget::setupShaders()
     m_valveProgram.link();
 
     m_poolProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, poolVertexSrc);
-    m_poolProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, poolFragmentSrc.toStdString().c_str());
+    m_poolProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, poolFrag.toStdString().c_str());
     m_poolProgram.link();
+
+    m_curtainProgram.addShaderFromSourceCode(QOpenGLShader::Vertex, curtainVertexSrc);
+    m_curtainProgram.addShaderFromSourceCode(QOpenGLShader::Fragment, curtainFragSrc);
+    m_curtainProgram.link();
 
     m_uniformMVP = m_particleProgram.uniformLocation("uMVP");
     m_uniformTime = m_particleProgram.uniformLocation("uTime");
+    m_uniformTexture = m_curtainProgram.uniformLocation("uTexture");
+    m_curtainUniformMVP = m_curtainProgram.uniformLocation("uMVP");
+    m_curtainUniformTex = m_curtainProgram.uniformLocation("uTexture");
 
-    qDebug() << "Shaders compiled and linked";
+    qDebug() << "Shaders compiled";
 }
 
 void GLWidget::setupBuffers()
 {
-    // 清理旧的缓冲区
-    if (m_particleVBO) glDeleteBuffers(1, &m_particleVBO);
-    if (m_particleVAO) glDeleteVertexArrays(1, &m_particleVAO);
-    if (m_jetVBO) glDeleteBuffers(1, &m_jetVBO);
-    if (m_jetVAO) glDeleteVertexArrays(1, &m_jetVAO);
-    if (m_valveVAO) glDeleteVertexArrays(1, &m_valveVAO);
-    if (m_poolVBO) glDeleteBuffers(1, &m_poolVBO);
-    if (m_poolVAO) glDeleteVertexArrays(1, &m_poolVAO);
-
-    // 粒子缓冲区
+    // 粒子
     glGenVertexArrays(1, &m_particleVAO);
     glBindVertexArray(m_particleVAO);
-
     glGenBuffers(1, &m_particleVBO);
     glBindBuffer(GL_ARRAY_BUFFER, m_particleVBO);
     glBufferData(GL_ARRAY_BUFFER, MAX_PARTICLES * 6 * 5 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
-
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    // 水柱缓冲区
+    // 水柱
     glGenVertexArrays(1, &m_jetVAO);
     glBindVertexArray(m_jetVAO);
-
     glGenBuffers(1, &m_jetVBO);
     glBindBuffer(GL_ARRAY_BUFFER, m_jetVBO);
     glBufferData(GL_ARRAY_BUFFER, m_fountainCount * 6 * 5 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
-
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    // 水阀缓冲区
-    std::vector<float> valveVertices;
-    std::vector<float> valveColors;
-
+    // 水阀（立方体）
+    std::vector<float> valveVertices, valveColors;
     for (const auto& fountain : m_fountains) {
         QVector3D pos = fountain.position;
-
-        float w = 0.3f;
-        float h = 0.5f;
-        float d = 0.3f;
-
+        float w = 0.3f, h = 0.5f, d = 0.3f;
         float vertices[] = {
             -w, -h,  d,  w, -h,  d,  w,  h,  d,  -w,  h,  d,
             -w, -h, -d, -w,  h, -d,  w,  h, -d,  w, -h, -d,
@@ -488,7 +461,6 @@ void GLWidget::setupBuffers()
             -w,  h, -d, -w,  h,  d,  w,  h,  d,  w,  h, -d,
             -w, -h, -d,  w, -h, -d,  w, -h,  d, -w, -h,  d
         };
-
         float colors[] = {
             0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f,
             0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f, 0.6f,0.5f,0.4f,
@@ -497,8 +469,7 @@ void GLWidget::setupBuffers()
             0.8f,0.7f,0.3f, 0.8f,0.7f,0.3f, 0.8f,0.7f,0.3f, 0.8f,0.7f,0.3f,
             0.5f,0.4f,0.3f, 0.5f,0.4f,0.3f, 0.5f,0.4f,0.3f, 0.5f,0.4f,0.3f
         };
-
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < 36; ++i) {
             valveVertices.push_back(pos.x() + vertices[i * 3]);
             valveVertices.push_back(pos.y() + vertices[i * 3 + 1]);
             valveVertices.push_back(pos.z() + vertices[i * 3 + 2]);
@@ -507,131 +478,232 @@ void GLWidget::setupBuffers()
             valveColors.push_back(colors[i * 3 + 2]);
         }
     }
-
     glGenVertexArrays(1, &m_valveVAO);
     glBindVertexArray(m_valveVAO);
-
     GLuint valveVBO_pos, valveVBO_color;
     glGenBuffers(1, &valveVBO_pos);
     glBindBuffer(GL_ARRAY_BUFFER, valveVBO_pos);
     glBufferData(GL_ARRAY_BUFFER, valveVertices.size() * sizeof(float), valveVertices.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-
     glGenBuffers(1, &valveVBO_color);
     glBindBuffer(GL_ARRAY_BUFFER, valveVBO_color);
     glBufferData(GL_ARRAY_BUFFER, valveColors.size() * sizeof(float), valveColors.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-    // 水池缓冲区
+    // 水池平面
     float y = -1.05f;
-
     float poolVertices[] = {
-        -m_poolWidth / 2, y, -m_poolDepth / 2, 0.0f, 0.0f,
-         m_poolWidth / 2, y, -m_poolDepth / 2, 1.0f, 0.0f,
-        -m_poolWidth / 2, y,  m_poolDepth / 2, 0.0f, 1.0f,
-
-         m_poolWidth / 2, y, -m_poolDepth / 2, 1.0f, 0.0f,
-         m_poolWidth / 2, y,  m_poolDepth / 2, 1.0f, 1.0f,
-        -m_poolWidth / 2, y,  m_poolDepth / 2, 0.0f, 1.0f
+        -m_poolWidth / 2, y, -m_poolDepth / 2, 0,0,
+         m_poolWidth / 2, y, -m_poolDepth / 2, 1,0,
+        -m_poolWidth / 2, y,  m_poolDepth / 2, 0,1,
+         m_poolWidth / 2, y, -m_poolDepth / 2, 1,0,
+         m_poolWidth / 2, y,  m_poolDepth / 2, 1,1,
+        -m_poolWidth / 2, y,  m_poolDepth / 2, 0,1
     };
-
     glGenVertexArrays(1, &m_poolVAO);
     glBindVertexArray(m_poolVAO);
-
     glGenBuffers(1, &m_poolVBO);
     glBindBuffer(GL_ARRAY_BUFFER, m_poolVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(poolVertices), poolVertices, GL_STATIC_DRAW);
-
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    qDebug() << "Buffers setup complete";
+}
+
+void GLWidget::initCurtain()
+{
+    loadCurtainImages(ConfigManager::getInstance().getCurtainImagePath());
+
+    float halfW = m_curtain.width / 2.0f;
+    float halfH = m_curtain.height / 2.0f;
+    float yBottom = m_curtain.position.y();
+    float yTop = yBottom + m_curtain.height;
+    float xLeft = m_curtain.position.x() - halfW;
+    float xRight = m_curtain.position.x() + halfW;
+    float z = m_curtain.position.z();
+    float vertices[] = {
+        xLeft, yBottom, z, 0,0,
+        xRight, yBottom, z, 1,0,
+        xRight, yTop,   z, 1,1,
+        xLeft, yTop,   z, 0,1
+    };
+    glGenVertexArrays(1, &m_curtainVAO);
+    glGenBuffers(1, &m_curtainVBO);
+    glBindVertexArray(m_curtainVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_curtainVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 
-    qDebug() << "Buffers recreated for" << m_fountainCount << "valves";
+    // 水帘粒子
+    int particleCount = 800;
+    m_curtainParticles.resize(particleCount);
+    for (auto& p : m_curtainParticles) {
+        p.pos = QVector3D(randomRange(-halfW, halfW) + m_curtain.position.x(),
+            randomRange(yBottom, yTop),
+            z + randomRange(-0.2f, 0.2f));
+        p.speedY = randomRange(-2.0f, -4.0f);
+        p.life = randomRange(0.5f, 1.5f);
+    }
 }
+
+void GLWidget::loadCurtainImages(const QString& folderPath)
+{
+    m_curtain.images.clear();
+    QDir dir(folderPath);
+    QStringList filters;
+    filters << "*.bmp" << "*.BMP";
+    QFileInfoList list = dir.entryInfoList(filters);
+    for (const auto& info : list) {
+        QImage img;
+        if (img.load(info.absoluteFilePath())) {
+            m_curtain.images.append(img.convertToFormat(QImage::Format_RGBA8888));
+        }
+    }
+    if (m_curtain.images.isEmpty()) {
+        QImage defaultImg(512, 512, QImage::Format_RGBA8888);
+        defaultImg.fill(Qt::blue);
+        m_curtain.images.append(defaultImg);
+    }
+    m_curtain.currentIndex = 0;
+    updateCurtainTexture();
+}
+
+void GLWidget::updateCurtainTexture()
+{
+    if (m_curtain.textureId == 0) glGenTextures(1, &m_curtain.textureId);
+    glBindTexture(GL_TEXTURE_2D, m_curtain.textureId);
+    const QImage& img = m_curtain.images[m_curtain.currentIndex];
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.width(), img.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, img.bits());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
+void GLWidget::updateCurtainParticles(float dt)
+{
+    float halfW = m_curtain.width / 2.0f;
+    float yBottom = m_curtain.position.y();
+    float yTop = yBottom + m_curtain.height;
+    float z = m_curtain.position.z();
+    for (auto& p : m_curtainParticles) {
+        p.pos.setY(p.pos.y() + p.speedY * dt);
+        p.life -= dt;
+        if (p.pos.y() < yBottom || p.life <= 0) {
+            p.pos.setY(yTop);
+            p.pos.setX(randomRange(-halfW, halfW) + m_curtain.position.x());
+            p.pos.setZ(z + randomRange(-0.2f, 0.2f));
+            p.speedY = randomRange(-2.5f, -4.5f);
+            p.life = randomRange(0.8f, 1.5f);
+        }
+    }
+}
+
+void GLWidget::renderCurtain(const QMatrix4x4& mvp)
+{
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    m_curtainProgram.bind();
+    m_curtainProgram.setUniformValue(m_curtainUniformMVP, mvp);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_curtain.textureId);
+    m_curtainProgram.setUniformValue(m_curtainUniformTex, 0);
+    glBindVertexArray(m_curtainVAO);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    glBindVertexArray(0);
+    m_curtainProgram.release();
+
+    // 简单渲染水帘粒子（白色点）
+    glPointSize(2.0f);
+    m_particleProgram.bind();
+    m_particleProgram.setUniformValue(m_uniformMVP, mvp);
+    std::vector<float> particleVerts;
+    for (const auto& cp : m_curtainParticles) {
+        particleVerts.push_back(cp.pos.x()); particleVerts.push_back(cp.pos.y()); particleVerts.push_back(cp.pos.z());
+        particleVerts.push_back(0.0f); particleVerts.push_back(0.0f);
+    }
+    if (!particleVerts.empty()) {
+        GLuint tempVAO, tempVBO;
+        glGenVertexArrays(1, &tempVAO);
+        glGenBuffers(1, &tempVBO);
+        glBindVertexArray(tempVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, tempVBO);
+        glBufferData(GL_ARRAY_BUFFER, particleVerts.size() * sizeof(float), particleVerts.data(), GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glDrawArrays(GL_POINTS, 0, particleVerts.size() / 5);
+        glDeleteVertexArrays(1, &tempVAO);
+        glDeleteBuffers(1, &tempVBO);
+    }
+    m_particleProgram.release();
+}
+
 void GLWidget::updateWaterJets(float dt)
 {
     static float timeOffset = 0.0f;
     timeOffset += dt;
-
-    // 获取音频数据
     auto& music = MusicPlayer::getInstance();
-    float beatStrength = music.getBeatStrength();
-    float bassLevel = music.getBassLevel();
 
     for (int i = 0; i < m_waterJets.size(); ++i) {
         auto& jet = m_waterJets[i];
         const auto& fountain = m_fountains[i];
-
         jet.start = QVector3D(fountain.position.x(), fountain.position.y() - 0.3f, fountain.position.z());
 
-        // 基础长度
         float length = m_waterJetLength;
-
-        // 音乐同步：水柱长度随音乐变化
         if (m_musicSyncEnabled) {
-            // 音频因子：节拍影响 + 低音影响
-            float audioFactor = 0.7f + (beatStrength * 0.5f + bassLevel * 0.3f) * m_musicSensitivity;
-            audioFactor = std::min(1.5f, audioFactor);
-            length = m_waterJetLength * audioFactor;
+            float beat = music.getBeatStrength();
+            float bass = music.getBassLevel();
+            float factor = 0.7f + (beat * 0.5f + bass * 0.3f) * m_musicSensitivity;
+            factor = std::min(1.5f, factor);
+            length = m_waterJetLength * factor;
         }
-
-        // 轻微的自然波动
+        // 轻微正弦波动
         float freq = 0.2f + (i % 7) * 0.03f;
-        float phase = i * 0.5f;
-        length += sin(timeOffset * freq + phase) * 0.15f;
-
+        length += sin(timeOffset * freq + i * 0.5f) * 0.15f;
         jet.end = jet.start + QVector3D(0.0f, -length, 0.0f);
         jet.width = m_waterJetTopWidth;
         jet.life = m_waterJetBottomWidth;
-
-        // 轻微摆动
+        // 摆动
         float sway = sin(timeOffset * 1.2f + i * 0.2f) * 0.01f;
         jet.end.setX(jet.end.x() + sway);
         jet.end.setZ(jet.end.z() + sway);
     }
 }
+
 void GLWidget::updateParticles(float dt)
 {
     dt = qMin(dt, 0.033f);
-
-    // 生成新粒子
     m_spawnTimer += dt;
     while (m_spawnTimer >= m_spawnRate && m_particles.size() < MAX_PARTICLES - 100) {
         m_spawnTimer -= m_spawnRate;
-
-        int particlesToCreate = QRandomGenerator::global()->bounded(2, 4);
-        for (int k = 0; k < particlesToCreate; ++k) {
-            if (m_waterJets.size() == 0) break;
-            int fountainId = QRandomGenerator::global()->bounded(m_waterJets.size());
-            const auto& jet = m_waterJets[fountainId];
-            if ((jet.start - jet.end).length() > 0.3f) {
-                createParticle(fountainId);
-            }
+        int toCreate = QRandomGenerator::global()->bounded(2, 4);
+        for (int k = 0; k < toCreate; ++k) {
+            if (m_waterJets.empty()) break;
+            int id = QRandomGenerator::global()->bounded(m_waterJets.size());
+            const auto& jet = m_waterJets[id];
+            if ((jet.start - jet.end).length() > 0.3f) createParticle(id);
         }
     }
 
-    // 更新粒子
     for (int i = 0; i < m_particles.size(); ++i) {
         auto& p = m_particles[i];
-
         p.vel += p.acc * dt;
         p.pos += p.vel * dt;
         p.life -= dt * 0.35f;
         p.vel *= 0.998f;
-
         if (p.pos.y() <= GROUND_Y) {
             m_particles.removeAt(i);
             i--;
-            continue;
         }
-
-        if (fabs(p.pos.x()) > m_poolWidth / 2 + 1.0f ||
+        else if (fabs(p.pos.x()) > m_poolWidth / 2 + 1.0f ||
             fabs(p.pos.z()) > m_poolDepth / 2 + 1.0f ||
             p.life <= 0.0f) {
             m_particles.removeAt(i);
@@ -648,17 +720,22 @@ void GLWidget::paintGL()
         m_lastTime = now;
         updateWaterJets(dt);
         updateParticles(dt);
+        updateCurtainParticles(dt);
+        // 图片切换
+        m_curtain.timer += dt;
+        if (m_curtain.timer >= m_curtain.interval) {
+            m_curtain.timer = 0;
+            m_curtain.currentIndex = (m_curtain.currentIndex + 1) % m_curtain.images.size();
+            updateCurtainTexture();
+        }
     }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     QMatrix4x4 view;
-    view.lookAt(m_cameraPos, m_cameraTarget, QVector3D(0.0f, 1.0f, 0.0f));
+    view.lookAt(m_cameraPos, m_cameraTarget, QVector3D(0, 1, 0));
     QMatrix4x4 mvp = m_projection * view;
 
-    // 1. 水池
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // 水池
     m_poolProgram.bind();
     m_poolProgram.setUniformValue(m_uniformMVP, mvp);
     glBindVertexArray(m_poolVAO);
@@ -666,77 +743,59 @@ void GLWidget::paintGL()
     glBindVertexArray(0);
     m_poolProgram.release();
 
-    // 2. 水柱
-    if (m_waterJets.size() > 0) {
-        std::vector<float> jetVertices;
+    // 水帘（半透明平面）
+    renderCurtain(mvp);
 
+    // 水柱
+    if (!m_waterJets.empty()) {
+        std::vector<float> jetVerts;
         for (const auto& jet : m_waterJets) {
-            QVector3D start = jet.start;
-            QVector3D end = jet.end;
-
-            float topWidth = jet.width;
-            float bottomWidth = jet.life;
-
-            jetVertices.push_back(start.x() - topWidth); jetVertices.push_back(start.y()); jetVertices.push_back(start.z()); jetVertices.push_back(0.0f); jetVertices.push_back(0.0f);
-            jetVertices.push_back(start.x() + topWidth); jetVertices.push_back(start.y()); jetVertices.push_back(start.z()); jetVertices.push_back(1.0f); jetVertices.push_back(0.0f);
-            jetVertices.push_back(end.x() - bottomWidth); jetVertices.push_back(end.y()); jetVertices.push_back(end.z()); jetVertices.push_back(0.0f); jetVertices.push_back(1.0f);
-
-            jetVertices.push_back(start.x() + topWidth); jetVertices.push_back(start.y()); jetVertices.push_back(start.z()); jetVertices.push_back(1.0f); jetVertices.push_back(0.0f);
-            jetVertices.push_back(end.x() + bottomWidth); jetVertices.push_back(end.y()); jetVertices.push_back(end.z()); jetVertices.push_back(1.0f); jetVertices.push_back(1.0f);
-            jetVertices.push_back(end.x() - bottomWidth); jetVertices.push_back(end.y()); jetVertices.push_back(end.z()); jetVertices.push_back(0.0f); jetVertices.push_back(1.0f);
+            float tW = jet.width;
+            float bW = jet.life;
+            QVector3D s = jet.start, e = jet.end;
+            jetVerts.push_back(s.x() - tW); jetVerts.push_back(s.y()); jetVerts.push_back(s.z()); jetVerts.push_back(0); jetVerts.push_back(0);
+            jetVerts.push_back(s.x() + tW); jetVerts.push_back(s.y()); jetVerts.push_back(s.z()); jetVerts.push_back(1); jetVerts.push_back(0);
+            jetVerts.push_back(e.x() - bW); jetVerts.push_back(e.y()); jetVerts.push_back(e.z()); jetVerts.push_back(0); jetVerts.push_back(1);
+            jetVerts.push_back(s.x() + tW); jetVerts.push_back(s.y()); jetVerts.push_back(s.z()); jetVerts.push_back(1); jetVerts.push_back(0);
+            jetVerts.push_back(e.x() + bW); jetVerts.push_back(e.y()); jetVerts.push_back(e.z()); jetVerts.push_back(1); jetVerts.push_back(1);
+            jetVerts.push_back(e.x() - bW); jetVerts.push_back(e.y()); jetVerts.push_back(e.z()); jetVerts.push_back(0); jetVerts.push_back(1);
         }
-
-        if (!jetVertices.empty()) {
-            glBindBuffer(GL_ARRAY_BUFFER, m_jetVBO);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, jetVertices.size() * sizeof(float), jetVertices.data());
-
-            m_jetProgram.bind();
-            m_jetProgram.setUniformValue(m_uniformMVP, mvp);
-            m_jetProgram.setUniformValue(m_uniformTime, now);
-
-            glBindVertexArray(m_jetVAO);
-            glDrawArrays(GL_TRIANGLES, 0, jetVertices.size() / 5);
-            glBindVertexArray(0);
-
-            m_jetProgram.release();
-        }
+        glBindBuffer(GL_ARRAY_BUFFER, m_jetVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, jetVerts.size() * sizeof(float), jetVerts.data());
+        m_jetProgram.bind();
+        m_jetProgram.setUniformValue(m_uniformMVP, mvp);
+        m_jetProgram.setUniformValue(m_uniformTime, now);
+        glBindVertexArray(m_jetVAO);
+        glDrawArrays(GL_TRIANGLES, 0, jetVerts.size() / 5);
+        glBindVertexArray(0);
+        m_jetProgram.release();
     }
 
-    // 3. 粒子
-    if (m_particles.size() > 0) {
-        std::vector<float> vertices;
-        vertices.reserve(m_particles.size() * 6 * 5);
-
+    // 水珠粒子
+    if (!m_particles.empty()) {
+        std::vector<float> pVerts;
         for (const auto& p : m_particles) {
-            float x = p.pos.x();
-            float y = p.pos.y();
-            float z = p.pos.z();
-            float size = p.size * (0.5f + p.life * 0.8f);
-
-            vertices.push_back(x - size); vertices.push_back(y - size); vertices.push_back(z); vertices.push_back(0.0f); vertices.push_back(0.0f);
-            vertices.push_back(x + size); vertices.push_back(y - size); vertices.push_back(z); vertices.push_back(1.0f); vertices.push_back(0.0f);
-            vertices.push_back(x - size); vertices.push_back(y + size); vertices.push_back(z); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-            vertices.push_back(x + size); vertices.push_back(y - size); vertices.push_back(z); vertices.push_back(1.0f); vertices.push_back(0.0f);
-            vertices.push_back(x + size); vertices.push_back(y + size); vertices.push_back(z); vertices.push_back(1.0f); vertices.push_back(1.0f);
-            vertices.push_back(x - size); vertices.push_back(y + size); vertices.push_back(z); vertices.push_back(0.0f); vertices.push_back(1.0f);
+            float sz = p.size * (0.5f + p.life * 0.8f);
+            float x = p.pos.x(), y = p.pos.y(), z = p.pos.z();
+            pVerts.push_back(x - sz); pVerts.push_back(y - sz); pVerts.push_back(z); pVerts.push_back(0); pVerts.push_back(0);
+            pVerts.push_back(x + sz); pVerts.push_back(y - sz); pVerts.push_back(z); pVerts.push_back(1); pVerts.push_back(0);
+            pVerts.push_back(x - sz); pVerts.push_back(y + sz); pVerts.push_back(z); pVerts.push_back(0); pVerts.push_back(1);
+            pVerts.push_back(x + sz); pVerts.push_back(y - sz); pVerts.push_back(z); pVerts.push_back(1); pVerts.push_back(0);
+            pVerts.push_back(x + sz); pVerts.push_back(y + sz); pVerts.push_back(z); pVerts.push_back(1); pVerts.push_back(1);
+            pVerts.push_back(x - sz); pVerts.push_back(y + sz); pVerts.push_back(z); pVerts.push_back(0); pVerts.push_back(1);
         }
-
         glBindBuffer(GL_ARRAY_BUFFER, m_particleVBO);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), vertices.data());
-
+        glBufferSubData(GL_ARRAY_BUFFER, 0, pVerts.size() * sizeof(float), pVerts.data());
         m_particleProgram.bind();
         m_particleProgram.setUniformValue(m_uniformMVP, mvp);
         m_particleProgram.setUniformValue(m_uniformTime, now);
-
         glBindVertexArray(m_particleVAO);
-        glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 5);
+        glDrawArrays(GL_TRIANGLES, 0, pVerts.size() / 5);
         glBindVertexArray(0);
-
         m_particleProgram.release();
     }
 
-    // 4. 水阀
+    // 水阀
     m_valveProgram.bind();
     m_valveProgram.setUniformValue(m_uniformMVP, mvp);
     glBindVertexArray(m_valveVAO);
@@ -745,10 +804,22 @@ void GLWidget::paintGL()
     m_valveProgram.release();
 }
 
+void GLWidget::autoAdjustCamera()
+{
+    float totalWidth = m_fountainCount * m_fountainSpacing;
+    float required = totalWidth / 1.2f;
+    m_cameraDistance = qBound(10.0f, required, 25.0f);
+    m_cameraTarget = QVector3D(0.0f, 3.0f, 0.0f);
+    float radX = qDegreesToRadians(m_cameraAngleX);
+    float radY = qDegreesToRadians(m_cameraAngleY);
+    m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
+    m_cameraPos.setY(m_cameraDistance * sin(radY));
+    m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
+}
+
 void GLWidget::resizeGL(int w, int h)
 {
     glViewport(0, 0, w, h);
-
     float aspect = float(w) / float(h);
     m_projection.setToIdentity();
     m_projection.perspective(45.0f, aspect, 0.1f, 100.0f);
@@ -764,13 +835,11 @@ void GLWidget::wheelEvent(QWheelEvent* event)
     float delta = event->angleDelta().y() / 120.0f;
     m_cameraDistance -= delta * 0.5f;
     m_cameraDistance = qBound(5.0f, m_cameraDistance, 25.0f);
-
     float radX = qDegreesToRadians(m_cameraAngleX);
     float radY = qDegreesToRadians(m_cameraAngleY);
     m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
     m_cameraPos.setY(m_cameraDistance * sin(radY));
     m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
-
     update();
 }
 
@@ -789,13 +858,11 @@ void GLWidget::mouseMoveEvent(QMouseEvent* event)
         m_cameraAngleX += delta.x() * 0.5f;
         m_cameraAngleY += delta.y() * 0.5f;
         m_cameraAngleY = qBound(-89.0f, m_cameraAngleY, 89.0f);
-
         float radX = qDegreesToRadians(m_cameraAngleX);
         float radY = qDegreesToRadians(m_cameraAngleY);
         m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
         m_cameraPos.setY(m_cameraDistance * sin(radY));
         m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
-
         m_lastMousePos = event->pos();
         update();
     }
@@ -803,98 +870,37 @@ void GLWidget::mouseMoveEvent(QMouseEvent* event)
 
 void GLWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton) {
-        m_mousePressed = false;
-    }
+    if (event->button() == Qt::LeftButton) m_mousePressed = false;
 }
 
 void GLWidget::keyPressEvent(QKeyEvent* event)
 {
     switch (event->key()) {
     case Qt::Key_Space:
-        for (int i = 0; i < 50; ++i) {
-            int fid = QRandomGenerator::global()->bounded(m_fountainCount);
-            createParticle(fid);
-        }
-        qDebug() << "Added particles";
+        for (int i = 0; i < 50; ++i)
+            createParticle(QRandomGenerator::global()->bounded(m_fountainCount));
         break;
     case Qt::Key_Up:
         m_spawnRate = qMax(0.005f, m_spawnRate - 0.002f);
-        qDebug() << "Spawn rate:" << m_spawnRate;
         break;
     case Qt::Key_Down:
         m_spawnRate = qMin(0.05f, m_spawnRate + 0.002f);
-        qDebug() << "Spawn rate:" << m_spawnRate;
         break;
     case Qt::Key_L:
         reloadConfig();
-        qDebug() << "Reloaded configuration";
         break;
     case Qt::Key_R:
         m_particles.clear();
-        qDebug() << "Cleared particles";
+        break;
+    default:
         break;
     }
 }
-void GLWidget::updateFountainsFromData(const QVector<FountainData>& fountains)
-{
-    // 确保 OpenGL 已经初始化
-    if (!isValid()) {
-        qDebug() << "OpenGL not ready, deferring update";
-        // 延迟执行
-        QTimer::singleShot(100, this, [this, fountains]() {
-            updateFountainsFromData(fountains);
-            });
-        return;
-    }
 
-    makeCurrent();
-
-    // 清除现有数据
-    m_fountains.clear();
-    m_waterJets.clear();
-    m_particles.clear();
-
-    // 重新创建喷泉和水柱
-    for (const auto& fd : fountains) {
-        if (!fd.enabled) continue;
-
-        // 创建喷泉信息
-        FountainInfo info;
-        info.position = fd.position;
-        info.sprayStrength = 12.0f;
-        info.sprayAngle = fd.sprayAngle * M_PI / 180.0f;
-        info.sprayDirection = 0.0f;
-        info.rotationAngle = 0.0f;
-        m_fountains.append(info);
-
-        // 创建水柱
-        WaterJetSegment jet;
-        jet.start = QVector3D(fd.position.x(), fd.position.y() - 0.3f, fd.position.z());
-        jet.end = jet.start + QVector3D(0.0f, -fd.height, 0.0f);
-        jet.width = m_waterJetTopWidth * fd.waterFlow;
-        jet.life = m_waterJetBottomWidth * fd.waterFlow;
-        m_waterJets.append(jet);
-    }
-
-    // 重新创建缓冲区
-    if (m_fountains.size() > 0) {
-        setupBuffers();
-    }
-
-    // 创建初始粒子
-    for (int i = 0; i < qMin(200, m_waterJets.size() * 4); ++i) {
-        if (m_waterJets.size() > 0) {
-            int fountainId = QRandomGenerator::global()->bounded(m_waterJets.size());
-            createParticle(fountainId);
-        }
-    }
-
-    // 更新相机位置
-    autoAdjustCamera();
-
-    update();
-    doneCurrent();
-
-    qDebug() << "Updated fountains:" << m_fountains.size();
-}
+// 音乐同步接口
+void GLWidget::setMusicSyncEnabled(bool enabled) { m_musicSyncEnabled = enabled; }
+void GLWidget::setMusicSensitivity(float sensitivity) { m_musicSensitivity = qBound(0.3f, sensitivity, 2.5f); }
+void GLWidget::loadMusicFile(const QString& filePath) { MusicPlayer::getInstance().loadMusic(filePath); }
+void GLWidget::playMusic() { MusicPlayer::getInstance().play(); }
+void GLWidget::pauseMusic() { MusicPlayer::getInstance().pause(); }
+void GLWidget::stopMusic() { MusicPlayer::getInstance().stop(); }
