@@ -673,7 +673,7 @@ void GLWidget::paintGL()
         updateWaterJets(dt);
         updateParticles(dt);
 
-        // 水帘滚动逻辑：图片从上向下滚动
+        // 水帘滚动逻辑：图片从上向下移动（偏移增加）
         if (!m_curtain.images.isEmpty()) {
             m_curtain.offset += dt * m_curtain.offsetSpeed;
             if (m_curtain.offset >= 1.0f) {
