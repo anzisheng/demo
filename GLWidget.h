@@ -63,7 +63,6 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
-    // 粒子系统
     void updateParticles(float deltaTime);
     void updateWaterJets(float deltaTime);
     void setupBuffers();
@@ -72,15 +71,12 @@ private:
     void createParticle(int fountainId);
     void applyConfig();
     void autoAdjustCamera();
-
-    // 地面柱状喷泉
     void setupGroundFountains();
 
     // 水帘相关
     void initCurtain();
     void loadCurtainImages(const QString& folderPath);
     void updateCurtainTexture();
-    void updateCurtainParticles(float dt);
     void renderCurtain(const QMatrix4x4& mvp);
 
     // 相机控制
@@ -124,23 +120,16 @@ private:
         GLuint textureId = 0;
         QVector<QImage> images;
         int currentIndex = 0;
-        float timer = 0.0f;
-        float interval = 2.0f;
+        float offset = 0.0f;          // 纹理偏移
+        float offsetSpeed = 0.0f;     // 偏移速度 (1/秒)
     } m_curtain;
-
-    struct CurtainParticle {
-        QVector3D pos;
-        float speedY;
-        float life;
-    };
-    QVector<CurtainParticle> m_curtainParticles;
 
     // Uniform 位置
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
     int m_curtainUniformMVP = 0;
     int m_curtainUniformTex = 0;
-    int m_uniformTexture = 0;
+    int m_curtainUniformOffset = 0;
 
     // 常量
     static const int MAX_PARTICLES = 10000;

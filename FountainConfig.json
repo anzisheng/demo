@@ -1,6 +1,7 @@
 {
   "fountainCount": 50,
   "fountainSpacing": 0.35,
+  "startX": -8.5,
   "fountainHeight": 5.5,
   "waterJetLength": 2.2,
   "waterJetTopWidth": 0.08,
@@ -21,10 +22,12 @@
   "waterAlpha": 0.65,
   "windStrength": 0.5,
   "windDirection": 0.3,
-  "curtainImagePath": "./resources/",
-  "curtainImageInterval": 2.0,
+  "arcRadius": 8.0,
+  "arcAngle": 120.0,
   "curtainWidth": 12.0,
   "curtainHeight": 6.0,
+  "curtainImagePath": "./resources/",
+  "curtainFallDuration": 4.0,
   "groundFountainCount": 30,
-  "groundFountainRadius": 4.0
+  "groundFountainRadius": 5.0
 }
