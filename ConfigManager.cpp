@@ -30,8 +30,18 @@ bool ConfigManager::loadConfig(const QString& filePath)
     if (obj.contains("waterValveCount")) m_waterValveCount = obj["waterValveCount"].toInt();
     if (obj.contains("waterValveSpacing")) m_waterValveSpacing = obj["waterValveSpacing"].toDouble();
     if (obj.contains("waterValveBaseHeight")) m_waterValveBaseHeight = obj["waterValveBaseHeight"].toDouble();
-    if (obj.contains("waterValveMaxLength")) m_waterValveMaxLength = obj["waterValveMaxLength"].toDouble();
     if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
+
+    if (obj.contains("dropSpawnRate")) m_dropSpawnRate = obj["dropSpawnRate"].toDouble();
+    if (obj.contains("dropMinSize")) m_dropMinSize = obj["dropMinSize"].toDouble();
+    if (obj.contains("dropMaxSize")) m_dropMaxSize = obj["dropMaxSize"].toDouble();
+    if (obj.contains("dropMinLife")) m_dropMinLife = obj["dropMinLife"].toDouble();
+    if (obj.contains("dropMaxLife")) m_dropMaxLife = obj["dropMaxLife"].toDouble();
+    if (obj.contains("dropSpeedX")) m_dropSpeedX = obj["dropSpeedX"].toDouble();
+    if (obj.contains("dropSpeedYMin")) m_dropSpeedYMin = obj["dropSpeedYMin"].toDouble();
+    if (obj.contains("dropSpeedYMax")) m_dropSpeedYMax = obj["dropSpeedYMax"].toDouble();
+    if (obj.contains("dropSpeedZ")) m_dropSpeedZ = obj["dropSpeedZ"].toDouble();
+    if (obj.contains("gravity")) m_gravity = obj["gravity"].toDouble();
 
     if (obj.contains("poolWidth")) m_poolWidth = obj["poolWidth"].toDouble();
     if (obj.contains("poolDepth")) m_poolDepth = obj["poolDepth"].toDouble();
@@ -42,7 +52,7 @@ bool ConfigManager::loadConfig(const QString& filePath)
     }
     if (obj.contains("waterAlpha")) m_waterAlpha = obj["waterAlpha"].toDouble();
 
-    qDebug() << "Config loaded, valve count:" << m_waterValveCount;
+    qDebug() << "Config loaded";
     return true;
 }
 
@@ -52,8 +62,18 @@ void ConfigManager::saveConfig(const QString& filePath)
     obj["waterValveCount"] = m_waterValveCount;
     obj["waterValveSpacing"] = m_waterValveSpacing;
     obj["waterValveBaseHeight"] = m_waterValveBaseHeight;
-    obj["waterValveMaxLength"] = m_waterValveMaxLength;
     obj["waterValveSize"] = m_waterValveSize;
+
+    obj["dropSpawnRate"] = m_dropSpawnRate;
+    obj["dropMinSize"] = m_dropMinSize;
+    obj["dropMaxSize"] = m_dropMaxSize;
+    obj["dropMinLife"] = m_dropMinLife;
+    obj["dropMaxLife"] = m_dropMaxLife;
+    obj["dropSpeedX"] = m_dropSpeedX;
+    obj["dropSpeedYMin"] = m_dropSpeedYMin;
+    obj["dropSpeedYMax"] = m_dropSpeedYMax;
+    obj["dropSpeedZ"] = m_dropSpeedZ;
+    obj["gravity"] = m_gravity;
 
     obj["poolWidth"] = m_poolWidth;
     obj["poolDepth"] = m_poolDepth;

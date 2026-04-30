@@ -2,11 +2,19 @@
   "waterValveCount": 200,
   "waterValveSpacing": 0.25,
   "waterValveBaseHeight": 3.0,
-  "waterValveMaxLength": 4.5,
   "waterValveSize": 0.2,
-
-  "poolWidth": 50.0,
-  "poolDepth": 8.0,
+  "dropSpawnRate": 0.02,
+  "dropMinSize": 0.05,
+  "dropMaxSize": 0.09,
+  "dropMinLife": 0.8,
+  "dropMaxLife": 1.2,
+  "dropSpeedX": 1.0,
+  "dropSpeedYMin": -4.0,
+  "dropSpeedYMax": -2.0,
+  "dropSpeedZ": 1.0,
+  "gravity": -9.8,
+  "poolWidth": 18.0,
+  "poolDepth": 12.0,
   "waterColor": [ 0.2, 0.65, 0.95 ],
   "waterAlpha": 0.65
 }

@@ -7,11 +7,12 @@
 #include <QElapsedTimer>
 #include <QMatrix4x4>
 
-struct WaterJetSegment {
-    QVector3D start;
-    QVector3D end;
-    float width;
+struct Drop {
+    QVector3D pos;
+    QVector3D vel;
+    QVector3D acc;
     float life;
+    float size;
 };
 
 class GLWidget : public QOpenGLWidget, protected QOpenGLFunctions_4_5_Core
@@ -32,8 +33,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
-    void createValveLine();
-    void updateWaterJets(float dt);
+    void createValves();
+    void updateDrops(float dt);
+    void createDrop(int valveIdx);
     void setupBuffers();
     void setupShaders();
     void applyConfig();
@@ -47,32 +49,36 @@ private:
     bool m_mousePressed;
 
     // 着色器
-    QOpenGLShaderProgram m_jetProgram;
-    QOpenGLShaderProgram m_poolProgram;
+    QOpenGLShaderProgram m_dropProgram;
     QOpenGLShaderProgram m_valveProgram;
+    QOpenGLShaderProgram m_poolProgram;
 
     // 缓冲区
-    GLuint m_jetVAO = 0, m_jetVBO = 0;
-    GLuint m_poolVAO = 0, m_poolVBO = 0;
+    GLuint m_dropVAO = 0, m_dropVBO = 0;
     GLuint m_valveVAO = 0, m_valveVBO = 0;
+    GLuint m_poolVAO = 0, m_poolVBO = 0;
 
-    QVector<WaterJetSegment> m_waterJets;
+    QVector<Drop> m_drops;
     QVector<QVector3D> m_valvePositions;
     int m_valveVertexCount = 0;
 
     // 参数
     int m_valveCount;
-    float m_valveSpacing, m_valveBaseHeight, m_valveMaxLength, m_valveSize;
+    float m_valveSpacing, m_valveBaseHeight, m_valveSize;
+    float m_dropSpawnRate, m_dropMinSize, m_dropMaxSize;
+    float m_dropMinLife, m_dropMaxLife, m_dropSpeedX, m_dropSpeedYMin, m_dropSpeedYMax, m_dropSpeedZ;
+    float m_gravity;
     float m_poolWidth, m_poolDepth, m_waterAlpha;
     QVector3D m_waterColor;
 
+    float m_spawnTimer = 0.0f;
+    float m_lastTime = 0.0f;
+    int m_timerId = 0;
+    bool m_initialized = false;
+    int m_maxDrops = 10000;
+
+    QElapsedTimer m_elapsedTimer;
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
     int m_valveUniformMVP = 0;
-
-    float m_lastTime = 0;
-    int m_timerId = 0;
-    bool m_initialized = false;
-
-    QElapsedTimer m_elapsedTimer;
 };
