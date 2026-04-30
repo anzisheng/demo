@@ -32,15 +32,13 @@ bool ConfigManager::loadConfig(const QString& filePath)
     if (obj.contains("waterValveBaseHeight")) m_waterValveBaseHeight = obj["waterValveBaseHeight"].toDouble();
     if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
 
-    if (obj.contains("dropSpawnRate")) m_dropSpawnRate = obj["dropSpawnRate"].toDouble();
+    if (obj.contains("dropBurstInterval")) m_dropBurstInterval = obj["dropBurstInterval"].toDouble();
     if (obj.contains("dropMinSize")) m_dropMinSize = obj["dropMinSize"].toDouble();
     if (obj.contains("dropMaxSize")) m_dropMaxSize = obj["dropMaxSize"].toDouble();
     if (obj.contains("dropMinLife")) m_dropMinLife = obj["dropMinLife"].toDouble();
     if (obj.contains("dropMaxLife")) m_dropMaxLife = obj["dropMaxLife"].toDouble();
-    if (obj.contains("dropSpeedX")) m_dropSpeedX = obj["dropSpeedX"].toDouble();
     if (obj.contains("dropSpeedYMin")) m_dropSpeedYMin = obj["dropSpeedYMin"].toDouble();
     if (obj.contains("dropSpeedYMax")) m_dropSpeedYMax = obj["dropSpeedYMax"].toDouble();
-    if (obj.contains("dropSpeedZ")) m_dropSpeedZ = obj["dropSpeedZ"].toDouble();
     if (obj.contains("gravity")) m_gravity = obj["gravity"].toDouble();
 
     if (obj.contains("poolWidth")) m_poolWidth = obj["poolWidth"].toDouble();
@@ -64,15 +62,13 @@ void ConfigManager::saveConfig(const QString& filePath)
     obj["waterValveBaseHeight"] = m_waterValveBaseHeight;
     obj["waterValveSize"] = m_waterValveSize;
 
-    obj["dropSpawnRate"] = m_dropSpawnRate;
+    obj["dropBurstInterval"] = m_dropBurstInterval;
     obj["dropMinSize"] = m_dropMinSize;
     obj["dropMaxSize"] = m_dropMaxSize;
     obj["dropMinLife"] = m_dropMinLife;
     obj["dropMaxLife"] = m_dropMaxLife;
-    obj["dropSpeedX"] = m_dropSpeedX;
     obj["dropSpeedYMin"] = m_dropSpeedYMin;
     obj["dropSpeedYMax"] = m_dropSpeedYMax;
-    obj["dropSpeedZ"] = m_dropSpeedZ;
     obj["gravity"] = m_gravity;
 
     obj["poolWidth"] = m_poolWidth;

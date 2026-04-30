@@ -35,7 +35,7 @@ protected:
 private:
     void createValves();
     void updateDrops(float dt);
-    void createDrop(int valveIdx);
+    void createDropForAllValves();   // 为所有水阀各创建一个水滴
     void setupBuffers();
     void setupShaders();
     void applyConfig();
@@ -62,20 +62,27 @@ private:
     QVector<QVector3D> m_valvePositions;
     int m_valveVertexCount = 0;
 
-    // 参数
+    // 参数（从配置文件读取）
     int m_valveCount;
-    float m_valveSpacing, m_valveBaseHeight, m_valveSize;
-    float m_dropSpawnRate, m_dropMinSize, m_dropMaxSize;
-    float m_dropMinLife, m_dropMaxLife, m_dropSpeedX, m_dropSpeedYMin, m_dropSpeedYMax, m_dropSpeedZ;
-    float m_gravity;
-    float m_poolWidth, m_poolDepth, m_waterAlpha;
-    QVector3D m_waterColor;
+    float m_valveSpacing;
+    float m_valveBaseHeight;
+    float m_valveSize;
 
-    float m_spawnTimer = 0.0f;
+    float m_dropBurstInterval;   // 每次批量生成水滴的间隔（秒）
+    float m_dropMinSize, m_dropMaxSize;
+    float m_dropMinLife, m_dropMaxLife;
+    float m_dropSpeedYMin, m_dropSpeedYMax;   // 垂直速度范围，X/Z 为0
+    float m_gravity;
+    float m_poolWidth, m_poolDepth;
+    QVector3D m_waterColor;
+    float m_waterAlpha;
+
+    // 运行时
+    float m_burstTimer = 0.0f;
     float m_lastTime = 0.0f;
     int m_timerId = 0;
     bool m_initialized = false;
-    int m_maxDrops = 10000;
+    int m_maxDrops = 50000;          // 最大水滴数量
 
     QElapsedTimer m_elapsedTimer;
     int m_uniformMVP = 0;
