@@ -440,6 +440,14 @@ void GLWidget::autoAdjustCamera()
 {
     float totalW = (m_valveCount - 1) * m_valveSpacing;
     float required = totalW / 1.2f;
-    m_cameraDistance = qBound(8.0f, required, 25.0f);
+    m_cameraDistance = qBound(10.0f, required, 28.0f);
+    // 目标点设为水阀中间偏下
     m_cameraTarget = QVector3D(0.0f, m_valveBaseHeight - 1.0f, 0.0f);
+    // 相机高度相对于水阀位置
+    float cameraHeight = m_valveBaseHeight + 5.0f;
+    float radX = qDegreesToRadians(m_cameraAngleX);
+    float radY = qDegreesToRadians(m_cameraAngleY);
+    m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
+    m_cameraPos.setY(cameraHeight);
+    m_cameraPos.setZ(m_cameraDistance * cos(radY) * cos(radX));
 }

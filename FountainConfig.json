@@ -1,7 +1,7 @@
 {
   "waterValveCount": 200,
   "waterValveSpacing": 0.25,
-  "waterValveBaseHeight": 3.0,
+  "waterValveBaseHeight": 15.0,
   "waterValveSize": 0.2,
 
   "dropBurstInterval": 0.03,
