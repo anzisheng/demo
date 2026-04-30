@@ -1,31 +1,12 @@
 {
-  "waterValveCount": 1000,
-  "waterValveSpacing": 0.35,
-  "waterValveImagePath": "./valve_image.bmp",
-  "waterValveBaseHeight": -0.5,
-  "waterValveMaxLength": 1.5,
+  "waterValveCount": 200,
+  "waterValveSpacing": 0.25,
+  "waterValveBaseHeight": 3.0,
+  "waterValveMaxLength": 4.5,
+  "waterValveSize": 0.2,
 
-  "curtainWidth": 12.0,
-  "curtainHeight": 6.0,
-  "curtainImagePath": "./resources/",
-  "curtainFallDuration": 4.0,
-
-  "spawnRate": 0.012,
-  "particleMinSize": 0.04,
-  "particleMaxSize": 0.07,
-  "particleMinLife": 0.8,
-  "particleMaxLife": 1.2,
-  "particleSpeedX": 1.2,
-  "particleSpeedYMin": -3.0,
-  "particleSpeedYMax": -1.5,
-  "particleSpeedZ": 1.2,
-  "gravity": -9.8,
-
-  "poolWidth": 18.0,
-  "poolDepth": 12.0,
+  "poolWidth": 50.0,
+  "poolDepth": 8.0,
   "waterColor": [ 0.2, 0.65, 0.95 ],
-  "waterAlpha": 0.65,
-
-  "windStrength": 0.5,
-  "windDirection": 0.3
+  "waterAlpha": 0.65
 }

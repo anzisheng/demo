@@ -1,10 +1,11 @@
 #include <QApplication>
-#include "MainWindow.h"
+#include "GLWidget.h"
 
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    MainWindow window;
-    window.show();
+    GLWidget w;
+    w.resize(1400, 800);
+    w.show();
     return app.exec();
 }
