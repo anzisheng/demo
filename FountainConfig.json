@@ -1,11 +1,10 @@
 {
-  "waterValveGridWidth": 200,
-  "waterValveGridHeight": 100,
-  "waterValveSpacingX": 0.25,
-  "waterValveSpacingZ": 0.25,
+  "waterValveCount": 400,
+  "waterValveSpacing": 0.25,
   "waterValveBaseHeight": 9.0,
   "waterValveSize": 0.2,
   "valveControlImage": "pattern.bmp",
+  "frameInterval": 0.1,
 
   "dropBurstInterval": 0.03,
   "dropMinSize": 0.05,
@@ -16,8 +15,8 @@
   "dropSpeedYMax": -11.0,
   "gravity": -9.8,
 
-  "poolWidth": 55.0,
-  "poolDepth": 30.0,
+  "poolWidth": 100.0,
+  "poolDepth": 20.0,
   "waterColor": [ 0.2, 0.65, 0.95 ],
   "waterAlpha": 0.65
 }

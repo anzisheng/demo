@@ -27,13 +27,12 @@ bool ConfigManager::loadConfig(const QString& filePath)
 
     QJsonObject obj = doc.object();
 
-    if (obj.contains("waterValveGridWidth")) m_waterValveGridWidth = obj["waterValveGridWidth"].toInt();
-    if (obj.contains("waterValveGridHeight")) m_waterValveGridHeight = obj["waterValveGridHeight"].toInt();
-    if (obj.contains("waterValveSpacingX")) m_waterValveSpacingX = obj["waterValveSpacingX"].toDouble();
-    if (obj.contains("waterValveSpacingZ")) m_waterValveSpacingZ = obj["waterValveSpacingZ"].toDouble();
+    if (obj.contains("waterValveCount")) m_waterValveCount = obj["waterValveCount"].toInt();
+    if (obj.contains("waterValveSpacing")) m_waterValveSpacing = obj["waterValveSpacing"].toDouble();
     if (obj.contains("waterValveBaseHeight")) m_waterValveBaseHeight = obj["waterValveBaseHeight"].toDouble();
     if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
     if (obj.contains("valveControlImage")) m_valveControlImage = obj["valveControlImage"].toString();
+    if (obj.contains("frameInterval")) m_frameInterval = obj["frameInterval"].toDouble();
 
     if (obj.contains("dropBurstInterval")) m_dropBurstInterval = obj["dropBurstInterval"].toDouble();
     if (obj.contains("dropMinSize")) m_dropMinSize = obj["dropMinSize"].toDouble();
@@ -60,13 +59,12 @@ bool ConfigManager::loadConfig(const QString& filePath)
 void ConfigManager::saveConfig(const QString& filePath)
 {
     QJsonObject obj;
-    obj["waterValveGridWidth"] = m_waterValveGridWidth;
-    obj["waterValveGridHeight"] = m_waterValveGridHeight;
-    obj["waterValveSpacingX"] = m_waterValveSpacingX;
-    obj["waterValveSpacingZ"] = m_waterValveSpacingZ;
+    obj["waterValveCount"] = m_waterValveCount;
+    obj["waterValveSpacing"] = m_waterValveSpacing;
     obj["waterValveBaseHeight"] = m_waterValveBaseHeight;
     obj["waterValveSize"] = m_waterValveSize;
     obj["valveControlImage"] = m_valveControlImage;
+    obj["frameInterval"] = m_frameInterval;
 
     obj["dropBurstInterval"] = m_dropBurstInterval;
     obj["dropMinSize"] = m_dropMinSize;

@@ -1,495 +1,93 @@
-#include "FountainDesigner.h"
-#include "FountainFile.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGroupBox>
-#include <QHeaderView>
-#include <QFileDialog>
-#include <QMessageBox>
-#include <cmath>
-#include "FountainDesigner.h"
-#include "FountainFile.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGroupBox>
-#include <QHeaderView>
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QSlider>
-#include <QFileInfo>
-#include <cmath>
-#include "MusicPlayer.h"
-FountainDesigner::FountainDesigner(GLWidget* glWidget, QWidget* parent)
-    : QWidget(parent)
-    , m_glWidget(glWidget)
-    , m_currentRow(-1)
+#include "ConfigManager.h"
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QDebug>
+
+ConfigManager& ConfigManager::getInstance()
 {
-    setupUI();
+    static ConfigManager instance;
+    return instance;
 }
 
-void FountainDesigner::setupUI()
+bool ConfigManager::loadConfig(const QString& filePath)
 {
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
-
-    // ========== 工具栏 ==========
-    QHBoxLayout* toolBar = new QHBoxLayout();
-
-    QPushButton* addBtn = new QPushButton("+ 添加喷泉");
-    QPushButton* removeBtn = new QPushButton("- 删除");
-    QPushButton* clearBtn = new QPushButton("清空全部");
-    QPushButton* loadBtn = new QPushButton("加载文件");
-    QPushButton* saveBtn = new QPushButton("保存文件");
-    QPushButton* applyBtn = new QPushButton("应用到场景");
-
-    toolBar->addWidget(addBtn);
-    toolBar->addWidget(removeBtn);
-    toolBar->addWidget(clearBtn);
-    toolBar->addWidget(loadBtn);
-    toolBar->addWidget(saveBtn);
-    toolBar->addWidget(applyBtn);
-
-    connect(addBtn, &QPushButton::clicked, this, &FountainDesigner::onAddFountain);
-    connect(removeBtn, &QPushButton::clicked, this, &FountainDesigner::onRemoveFountain);
-    connect(clearBtn, &QPushButton::clicked, this, &FountainDesigner::onClearAll);
-    connect(loadBtn, &QPushButton::clicked, this, &FountainDesigner::onLoadFile);
-    connect(saveBtn, &QPushButton::clicked, this, &FountainDesigner::onSaveFile);
-    connect(applyBtn, &QPushButton::clicked, this, &FountainDesigner::onApplyToScene);
-
-    mainLayout->addLayout(toolBar);
-
-    // ========== 批量生成工具 ==========
-    QGroupBox* batchGroup = new QGroupBox("批量生成");
-    QHBoxLayout* batchLayout = new QHBoxLayout();
-
-    QPushButton* archBtn = new QPushButton("拱形排列");
-    QPushButton* circleBtn = new QPushButton("圆形排列");
-    QPushButton* lineBtn = new QPushButton("直线排列");
-    QPushButton* gridBtn = new QPushButton("网格排列");
-
-    m_countSpin = new QSpinBox();
-    m_countSpin->setRange(1, 200);
-    m_countSpin->setValue(20);
-    m_spacingSpin = new QDoubleSpinBox();
-    m_spacingSpin->setRange(0.2, 2.0);
-    m_spacingSpin->setValue(0.5);
-    m_archHeightSpin = new QDoubleSpinBox();
-    m_archHeightSpin->setRange(0, 5);
-    m_archHeightSpin->setValue(2.0);
-    m_radiusSpin = new QDoubleSpinBox();
-    m_radiusSpin->setRange(1, 10);
-    m_radiusSpin->setValue(5.0);
-
-    batchLayout->addWidget(archBtn);
-    batchLayout->addWidget(circleBtn);
-    batchLayout->addWidget(lineBtn);
-    batchLayout->addWidget(gridBtn);
-    batchLayout->addWidget(new QLabel("个数:"));
-    batchLayout->addWidget(m_countSpin);
-    batchLayout->addWidget(new QLabel("间距:"));
-    batchLayout->addWidget(m_spacingSpin);
-    batchLayout->addWidget(new QLabel("拱高:"));
-    batchLayout->addWidget(m_archHeightSpin);
-    batchLayout->addWidget(new QLabel("半径:"));
-    batchLayout->addWidget(m_radiusSpin);
-
-    batchGroup->setLayout(batchLayout);
-    mainLayout->addWidget(batchGroup);
-
-    connect(archBtn, &QPushButton::clicked, this, &FountainDesigner::onGenerateArch);
-    connect(circleBtn, &QPushButton::clicked, this, &FountainDesigner::onGenerateCircle);
-    connect(lineBtn, &QPushButton::clicked, this, &FountainDesigner::onGenerateLine);
-    connect(gridBtn, &QPushButton::clicked, this, &FountainDesigner::onGenerateGrid);
-
-    // ========== 喷泉列表 ==========
-    m_tableWidget = new QTableWidget();
-    m_tableWidget->setColumnCount(6);
-    m_tableWidget->setHorizontalHeaderLabels({ "ID", "X", "Y", "Z", "高度", "启用" });
-    m_tableWidget->horizontalHeader()->setStretchLastSection(true);
-    m_tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
-
-    connect(m_tableWidget, &QTableWidget::itemSelectionChanged,
-        this, &FountainDesigner::onTableSelectionChanged);
-
-    mainLayout->addWidget(m_tableWidget);
-
-    // ========== 属性面板 ==========
-    m_propertyPanel = new QWidget();
-    QGridLayout* propLayout = new QGridLayout(m_propertyPanel);
-
-    propLayout->addWidget(new QLabel("X:"), 0, 0);
-    m_xSpin = new QDoubleSpinBox();
-    m_xSpin->setRange(-15, 15);
-    m_xSpin->setSingleStep(0.1);
-
-    propLayout->addWidget(new QLabel("Y:"), 0, 2);
-    m_ySpin = new QDoubleSpinBox();
-    m_ySpin->setRange(0, 10);
-    m_ySpin->setSingleStep(0.1);
-
-    propLayout->addWidget(new QLabel("Z:"), 0, 4);
-    m_zSpin = new QDoubleSpinBox();
-    m_zSpin->setRange(-10, 10);
-    m_zSpin->setSingleStep(0.1);
-
-    propLayout->addWidget(new QLabel("高度:"), 1, 0);
-    m_heightSpin = new QDoubleSpinBox();
-    m_heightSpin->setRange(0.5, 5);
-    m_heightSpin->setSingleStep(0.1);
-
-    propLayout->addWidget(new QLabel("水流量:"), 1, 2);
-    m_flowSpin = new QDoubleSpinBox();
-    m_flowSpin->setRange(0, 1);
-    m_flowSpin->setSingleStep(0.05);
-
-    propLayout->addWidget(new QLabel("喷射角:"), 1, 4);
-    m_angleSpin = new QDoubleSpinBox();
-    m_angleSpin->setRange(-90, 90);
-    m_angleSpin->setSingleStep(5);
-
-    propLayout->addWidget(new QLabel("启用:"), 2, 0);
-    m_enabledCheck = new QCheckBox();
-    m_enabledCheck->setChecked(true);
-
-    QPushButton* updateBtn = new QPushButton("更新属性");
-    propLayout->addWidget(updateBtn, 2, 2, 1, 2);
-
-    connect(updateBtn, &QPushButton::clicked, this, &FountainDesigner::onPropertyChanged);
-
-    mainLayout->addWidget(m_propertyPanel);
-
-    // 初始示例数据
-    onGenerateArch();
-    // 音乐控制面板
-    QGroupBox* musicGroup = new QGroupBox("音乐播放器");
-    QVBoxLayout* musicLayout = new QVBoxLayout();
-
-    // 文件选择
-    QHBoxLayout* fileLayout = new QHBoxLayout();
-    QPushButton* selectFileBtn = new QPushButton("选择音乐文件");
-    QLabel* musicNameLabel = new QLabel("未选择音乐");
-    fileLayout->addWidget(selectFileBtn);
-    fileLayout->addWidget(musicNameLabel);
-
-    // 播放控制
-    QHBoxLayout* controlLayout = new QHBoxLayout();
-    QPushButton* playBtn = new QPushButton("播放");
-    QPushButton* pauseBtn = new QPushButton("暂停");
-    QPushButton* stopBtn = new QPushButton("停止");
-    QPushButton* syncEnableBtn = new QPushButton("音乐同步");
-    syncEnableBtn->setCheckable(true);
-    syncEnableBtn->setChecked(false);
-    QDoubleSpinBox* sensitivitySpin = new QDoubleSpinBox();
-    sensitivitySpin->setRange(0.3, 2.5);
-    sensitivitySpin->setValue(1.0);
-    sensitivitySpin->setSingleStep(0.1);
-    controlLayout->addWidget(playBtn);
-    controlLayout->addWidget(pauseBtn);
-    controlLayout->addWidget(stopBtn);
-    controlLayout->addWidget(syncEnableBtn);
-    controlLayout->addWidget(new QLabel("灵敏度:"));
-    controlLayout->addWidget(sensitivitySpin);
-
-    // 音量控制
-    QHBoxLayout* volumeLayout = new QHBoxLayout();
-    QSlider* volumeSlider = new QSlider(Qt::Horizontal);
-    volumeSlider->setRange(0, 100);
-    volumeSlider->setValue(70);
-    volumeLayout->addWidget(new QLabel("音量:"));
-    volumeLayout->addWidget(volumeSlider);
-
-    musicLayout->addLayout(fileLayout);
-    musicLayout->addLayout(controlLayout);
-    musicLayout->addLayout(volumeLayout);
-    musicGroup->setLayout(musicLayout);
-    mainLayout->addWidget(musicGroup);
-
-    // 连接信号
-    connect(selectFileBtn, &QPushButton::clicked, [this, musicNameLabel]() {
-        QString filePath = QFileDialog::getOpenFileName(this, "选择音乐文件", "",
-            "音频文件 (*.mp3 *.wav *.flac *.ogg);;所有文件 (*)");
-        if (!filePath.isEmpty() && m_glWidget) {
-            m_glWidget->loadMusicFile(filePath);
-            musicNameLabel->setText(QFileInfo(filePath).fileName());
-        }
-        });
-
-    connect(playBtn, &QPushButton::clicked, [this]() {
-        if (m_glWidget) m_glWidget->playMusic();
-        });
-
-    connect(pauseBtn, &QPushButton::clicked, [this]() {
-        if (m_glWidget) m_glWidget->pauseMusic();
-        });
-
-    connect(stopBtn, &QPushButton::clicked, [this]() {
-        if (m_glWidget) m_glWidget->stopMusic();
-        });
-
-    connect(syncEnableBtn, &QPushButton::toggled, [this](bool checked) {
-        if (m_glWidget) m_glWidget->setMusicSyncEnabled(checked);
-        });
-
-    connect(sensitivitySpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-        [this](double value) {
-            if (m_glWidget) m_glWidget->setMusicSensitivity((float)value);
-        });
-
-    connect(volumeSlider, &QSlider::valueChanged, [](int value) {
-        MusicPlayer::getInstance().setVolume(value);
-        });
-
-
-}
-
-void FountainDesigner::loadFountains(const QVector<FountainData>& fountains)
-{
-    m_fountains = fountains;
-    updateTable();
-}
-
-QVector<FountainData> FountainDesigner::getFountains() const
-{
-    return m_fountains;
-}
-
-void FountainDesigner::onAddFountain()
-{
-    FountainData f;
-    f.id = m_fountains.size() + 1;
-    f.position = QVector3D(0, 5.5, 0);
-    f.height = 2.2;
-    f.waterFlow = 0.5;
-    f.sprayAngle = -60;
-    f.enabled = true;
-    m_fountains.append(f);
-    updateTable();
-}
-
-void FountainDesigner::onRemoveFountain()
-{
-    if (m_currentRow >= 0 && m_currentRow < m_fountains.size()) {
-        m_fountains.removeAt(m_currentRow);
-        updateTable();
-        if (m_currentRow >= m_fountains.size()) {
-            m_currentRow = m_fountains.size() - 1;
-        }
-        updatePropertyPanel();
-    }
-}
-
-void FountainDesigner::onClearAll()
-{
-    m_fountains.clear();
-    updateTable();
-}
-
-void FountainDesigner::onLoadFile()
-{
-    QString filePath = QFileDialog::getOpenFileName(this, "打开喷泉文件", "", "喷泉文件 (*.fountain);;JSON文件 (*.json)");
-    if (!filePath.isEmpty()) {
-        if (FountainFile::loadFromFile(filePath, m_fountains)) {
-            updateTable();
-            QMessageBox::information(this, "成功", "加载了 " + QString::number(m_fountains.size()) + " 个喷泉");
-        }
-        else {
-            QMessageBox::warning(this, "错误", "无法加载文件");
-        }
-    }
-}
-
-void FountainDesigner::onSaveFile()
-{
-    QString filePath = QFileDialog::getSaveFileName(this, "保存喷泉文件", "", "喷泉文件 (*.fountain)");
-    if (!filePath.isEmpty()) {
-        if (FountainFile::saveToFile(filePath, m_fountains)) {
-            QMessageBox::information(this, "成功", "保存了 " + QString::number(m_fountains.size()) + " 个喷泉");
-        }
-        else {
-            QMessageBox::warning(this, "错误", "无法保存文件");
-        }
-    }
-}
-
-void FountainDesigner::onApplyToScene()
-{
-    emit fountainDataChanged(m_fountains);
-}
-
-void FountainDesigner::onTableSelectionChanged()
-{
-    QModelIndexList selected = m_tableWidget->selectionModel()->selectedRows();
-    if (!selected.isEmpty()) {
-        m_currentRow = selected.first().row();
-        updatePropertyPanel();
-    }
-}
-
-void FountainDesigner::onPropertyChanged()
-{
-    if (m_currentRow >= 0 && m_currentRow < m_fountains.size()) {
-        FountainData f = getCurrentFountain();
-        m_fountains[m_currentRow] = f;
-        updateTable();
-        emit fountainDataChanged(m_fountains);
-    }
-}
-
-void FountainDesigner::onGenerateArch()
-{
-    m_fountains.clear();
-
-    int count = m_countSpin->value();
-    float width = count * m_spacingSpin->value();
-    float archHeight = m_archHeightSpin->value();
-    float startX = -width / 2.0f;
-    float baseY = 5.5f;
-
-    for (int i = 0; i < count; ++i) {
-        float x = startX + i * m_spacingSpin->value();
-
-        // 抛物线公式
-        float a = -4.0f * archHeight / (width * width);
-        float yOffset = a * x * x + archHeight;
-
-        FountainData f;
-        f.id = i + 1;
-        f.position = QVector3D(x, baseY + yOffset, 0);
-        f.height = 2.2;
-        f.waterFlow = 0.5;
-        f.sprayAngle = -60;
-        f.enabled = true;
-        m_fountains.append(f);
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Cannot open config file:" << filePath << ", using default values";
+        return false;
     }
 
-    updateTable();
-    emit fountainDataChanged(m_fountains);
-}
-
-void FountainDesigner::onGenerateCircle()
-{
-    m_fountains.clear();
-
-    int count = m_countSpin->value();
-    float radius = m_radiusSpin->value();
-    float baseY = 5.5f;
-
-    for (int i = 0; i < count; ++i) {
-        float angle = 2 * M_PI * i / count;
-        float x = cos(angle) * radius;
-        float z = sin(angle) * radius;
-
-        FountainData f;
-        f.id = i + 1;
-        f.position = QVector3D(x, baseY, z);
-        f.height = 2.2;
-        f.waterFlow = 0.5;
-        f.sprayAngle = -60;
-        f.enabled = true;
-        m_fountains.append(f);
+    QByteArray data = file.readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull()) {
+        qDebug() << "Invalid JSON format, using default values";
+        return false;
     }
 
-    updateTable();
-    emit fountainDataChanged(m_fountains);
+    QJsonObject obj = doc.object();
+
+    if (obj.contains("waterValveCount")) m_waterValveCount = obj["waterValveCount"].toInt();
+    if (obj.contains("waterValveSpacing")) m_waterValveSpacing = obj["waterValveSpacing"].toDouble();
+    if (obj.contains("waterValveBaseHeight")) m_waterValveBaseHeight = obj["waterValveBaseHeight"].toDouble();
+    if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
+    if (obj.contains("valveControlImage")) m_valveControlImage = obj["valveControlImage"].toString();
+    if (obj.contains("frameInterval")) m_frameInterval = obj["frameInterval"].toDouble();
+
+    if (obj.contains("dropBurstInterval")) m_dropBurstInterval = obj["dropBurstInterval"].toDouble();
+    if (obj.contains("dropMinSize")) m_dropMinSize = obj["dropMinSize"].toDouble();
+    if (obj.contains("dropMaxSize")) m_dropMaxSize = obj["dropMaxSize"].toDouble();
+    if (obj.contains("dropMinLife")) m_dropMinLife = obj["dropMinLife"].toDouble();
+    if (obj.contains("dropMaxLife")) m_dropMaxLife = obj["dropMaxLife"].toDouble();
+    if (obj.contains("dropSpeedYMin")) m_dropSpeedYMin = obj["dropSpeedYMin"].toDouble();
+    if (obj.contains("dropSpeedYMax")) m_dropSpeedYMax = obj["dropSpeedYMax"].toDouble();
+    if (obj.contains("gravity")) m_gravity = obj["gravity"].toDouble();
+
+    if (obj.contains("poolWidth")) m_poolWidth = obj["poolWidth"].toDouble();
+    if (obj.contains("poolDepth")) m_poolDepth = obj["poolDepth"].toDouble();
+    if (obj.contains("waterColor")) {
+        QJsonArray arr = obj["waterColor"].toArray();
+        if (arr.size() >= 3)
+            m_waterColor = QVector3D(arr[0].toDouble(), arr[1].toDouble(), arr[2].toDouble());
+    }
+    if (obj.contains("waterAlpha")) m_waterAlpha = obj["waterAlpha"].toDouble();
+
+    qDebug() << "Config loaded";
+    return true;
 }
 
-void FountainDesigner::onGenerateLine()
+void ConfigManager::saveConfig(const QString& filePath)
 {
-    m_fountains.clear();
+    QJsonObject obj;
+    obj["waterValveCount"] = m_waterValveCount;
+    obj["waterValveSpacing"] = m_waterValveSpacing;
+    obj["waterValveBaseHeight"] = m_waterValveBaseHeight;
+    obj["waterValveSize"] = m_waterValveSize;
+    obj["valveControlImage"] = m_valveControlImage;
+    obj["frameInterval"] = m_frameInterval;
 
-    int count = m_countSpin->value();
-    float startX = -count * m_spacingSpin->value() / 2.0f;
-    float baseY = 5.5f;
+    obj["dropBurstInterval"] = m_dropBurstInterval;
+    obj["dropMinSize"] = m_dropMinSize;
+    obj["dropMaxSize"] = m_dropMaxSize;
+    obj["dropMinLife"] = m_dropMinLife;
+    obj["dropMaxLife"] = m_dropMaxLife;
+    obj["dropSpeedYMin"] = m_dropSpeedYMin;
+    obj["dropSpeedYMax"] = m_dropSpeedYMax;
+    obj["gravity"] = m_gravity;
 
-    for (int i = 0; i < count; ++i) {
-        float x = startX + i * m_spacingSpin->value();
+    obj["poolWidth"] = m_poolWidth;
+    obj["poolDepth"] = m_poolDepth;
+    QJsonArray colorArr;
+    colorArr.append(m_waterColor.x());
+    colorArr.append(m_waterColor.y());
+    colorArr.append(m_waterColor.z());
+    obj["waterColor"] = colorArr;
+    obj["waterAlpha"] = m_waterAlpha;
 
-        FountainData f;
-        f.id = i + 1;
-        f.position = QVector3D(x, baseY, 0);
-        f.height = 2.2;
-        f.waterFlow = 0.5;
-        f.sprayAngle = -60;
-        f.enabled = true;
-        m_fountains.append(f);
+    QJsonDocument doc(obj);
+    QFile file(filePath);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(doc.toJson());
+        qDebug() << "Config saved";
     }
-
-    updateTable();
-    emit fountainDataChanged(m_fountains);
-}
-
-void FountainDesigner::onGenerateGrid()
-{
-    m_fountains.clear();
-
-    int cols = sqrt(m_countSpin->value());
-    int rows = cols;
-    float spacing = m_spacingSpin->value();
-    float startX = -cols * spacing / 2.0f;
-    float startZ = -rows * spacing / 2.0f;
-    float baseY = 5.5f;
-    int id = 1;
-
-    for (int i = 0; i < cols; ++i) {
-        for (int j = 0; j < rows; ++j) {
-            float x = startX + i * spacing;
-            float z = startZ + j * spacing;
-
-            FountainData f;
-            f.id = id++;
-            f.position = QVector3D(x, baseY, z);
-            f.height = 2.2;
-            f.waterFlow = 0.5;
-            f.sprayAngle = -60;
-            f.enabled = true;
-            m_fountains.append(f);
-        }
-    }
-
-    updateTable();
-    emit fountainDataChanged(m_fountains);
-}
-
-void FountainDesigner::updateTable()
-{
-    m_tableWidget->setRowCount(m_fountains.size());
-    for (int i = 0; i < m_fountains.size(); ++i) {
-        const auto& f = m_fountains[i];
-        m_tableWidget->setItem(i, 0, new QTableWidgetItem(QString::number(f.id)));
-        m_tableWidget->setItem(i, 1, new QTableWidgetItem(QString::number(f.position.x(), 'f', 2)));
-        m_tableWidget->setItem(i, 2, new QTableWidgetItem(QString::number(f.position.y(), 'f', 2)));
-        m_tableWidget->setItem(i, 3, new QTableWidgetItem(QString::number(f.position.z(), 'f', 2)));
-        m_tableWidget->setItem(i, 4, new QTableWidgetItem(QString::number(f.height, 'f', 2)));
-        m_tableWidget->setItem(i, 5, new QTableWidgetItem(f.enabled ? "是" : "否"));
-    }
-    m_tableWidget->resizeColumnsToContents();
-}
-
-void FountainDesigner::updatePropertyPanel()
-{
-    if (m_currentRow >= 0 && m_currentRow < m_fountains.size()) {
-        const auto& f = m_fountains[m_currentRow];
-        m_xSpin->setValue(f.position.x());
-        m_ySpin->setValue(f.position.y());
-        m_zSpin->setValue(f.position.z());
-        m_heightSpin->setValue(f.height);
-        m_flowSpin->setValue(f.waterFlow);
-        m_angleSpin->setValue(f.sprayAngle);
-        m_enabledCheck->setChecked(f.enabled);
-        m_propertyPanel->setEnabled(true);
-    }
-    else {
-        m_propertyPanel->setEnabled(false);
-    }
-}
-
-FountainData FountainDesigner::getCurrentFountain() const
-{
-    FountainData f;
-    f.id = m_currentRow + 1;
-    f.position = QVector3D(m_xSpin->value(), m_ySpin->value(), m_zSpin->value());
-    f.height = m_heightSpin->value();
-    f.waterFlow = m_flowSpin->value();
-    f.sprayAngle = m_angleSpin->value();
-    f.enabled = m_enabledCheck->isChecked();
-    return f;
 }

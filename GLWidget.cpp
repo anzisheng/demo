@@ -21,10 +21,8 @@ GLWidget::GLWidget(QWidget* parent)
     , m_cameraAngleX(0.0f)
     , m_cameraAngleY(35.0f)
     , m_mousePressed(false)
-    , m_gridWidth(200)
-    , m_gridHeight(100)
-    , m_spacingX(0.25f)
-    , m_spacingZ(0.25f)
+    , m_valveCount(400)
+    , m_valveSpacing(0.25f)
     , m_valveBaseHeight(9.0f)
     , m_valveSize(0.2f)
     , m_dropBurstInterval(0.03f)
@@ -35,10 +33,11 @@ GLWidget::GLWidget(QWidget* parent)
     , m_dropSpeedYMin(-14.0f)
     , m_dropSpeedYMax(-11.0f)
     , m_gravity(-9.8f)
-    , m_poolWidth(55.0f)
-    , m_poolDepth(30.0f)
+    , m_poolWidth(100.0f)
+    , m_poolDepth(20.0f)
     , m_waterColor(0.2f, 0.65f, 0.95f)
     , m_waterAlpha(0.65f)
+    , m_frameInterval(0.1f)
     , m_valvesEnabled(true)
     , m_burstTimer(0.0f)
     , m_lastTime(0.0f)
@@ -67,12 +66,11 @@ GLWidget::~GLWidget()
 void GLWidget::applyConfig()
 {
     auto& config = ConfigManager::getInstance();
-    m_gridWidth = config.getWaterValveGridWidth();
-    m_gridHeight = config.getWaterValveGridHeight();
-    m_spacingX = config.getWaterValveSpacingX();
-    m_spacingZ = config.getWaterValveSpacingZ();
+    m_valveCount = config.getWaterValveCount();
+    m_valveSpacing = config.getWaterValveSpacing();
     m_valveBaseHeight = config.getWaterValveBaseHeight();
     m_valveSize = config.getWaterValveSize();
+    m_frameInterval = config.getFrameInterval();
 
     m_dropBurstInterval = config.getDropBurstInterval();
     m_dropMinSize = config.getDropMinSize();
@@ -115,17 +113,13 @@ void GLWidget::initializeGL()
 void GLWidget::createValves()
 {
     m_valvePositions.clear();
-    float startX = -(m_gridWidth - 1) * m_spacingX / 2.0f;
-    float startZ = -(m_gridHeight - 1) * m_spacingZ / 2.0f;
-    for (int row = 0; row < m_gridHeight; ++row) {
-        float z = startZ + row * m_spacingZ;
-        for (int col = 0; col < m_gridWidth; ++col) {
-            float x = startX + col * m_spacingX;
-            m_valvePositions.append(QVector3D(x, m_valveBaseHeight, z));
-        }
+    float startX = -(m_valveCount - 1) * m_valveSpacing / 2.0f;
+    for (int i = 0; i < m_valveCount; ++i) {
+        float x = startX + i * m_valveSpacing;
+        m_valvePositions.append(QVector3D(x, m_valveBaseHeight, 0.0f));
     }
 
-    // 构建水阀立方体模型（每个阀门一个立方体）
+    // 构建立方体顶点数据
     std::vector<float> valveVertices;
     float s = m_valveSize / 2.0f;
     for (const auto& pos : m_valvePositions) {
@@ -161,38 +155,42 @@ void GLWidget::createValves()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
 
-    qDebug() << "Created" << m_valvePositions.size() << "valves";
+    qDebug() << "Created" << m_valveCount << "valves";
 }
 
 void GLWidget::loadValveControlImage(const QString& filePath)
 {
-    QImage img(filePath);
-    if (img.isNull()) {
-        qDebug() << "Failed to load valve control image:" << filePath << ", enabling all valves";
-        m_valveEnabled.fill(true, m_valvePositions.size());
+    m_controlImage = QImage(filePath);
+    if (m_controlImage.isNull()) {
+        qDebug() << "Failed to load image:" << filePath << ", enabling all valves";
+        m_valveEnabled.fill(true, m_valveCount);
         return;
     }
-    // 缩放图片到网格尺寸（宽度 = 列数，高度 = 行数）
-    img = img.scaled(m_gridWidth, m_gridHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    m_valveEnabled.resize(m_gridWidth * m_gridHeight);
-    // 从下往上逐行读取（图片底部对应水阀前排 row=0）
-    for (int row = 0; row < m_gridHeight; ++row) {
-        int srcRow = m_gridHeight - 1 - row;  // 原图片行索引（从上到下）
-        for (int col = 0; col < m_gridWidth; ++col) {
-            QRgb pixel = img.pixel(col, srcRow);
-            bool enabled = (qGray(pixel) > 128);
-            int idx = row * m_gridWidth + col;
-            m_valveEnabled[idx] = enabled;
-        }
+    // 缩放宽度到水阀数量，高度保持原样（支持多帧）
+    m_controlImage = m_controlImage.scaled(m_valveCount, m_controlImage.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    m_currentFrame = 0;
+    updateValveStateFromFrame();
+    qDebug() << "Image loaded, frames:" << m_controlImage.height();
+}
+
+void GLWidget::updateValveStateFromFrame()
+{
+    if (m_controlImage.isNull()) return;
+    int frame = m_currentFrame % m_controlImage.height();
+    m_valveEnabled.resize(m_valveCount);
+    for (int i = 0; i < m_valveCount; ++i) {
+        QRgb pixel = m_controlImage.pixel(i, frame);
+        int brightness = qGray(pixel);
+        m_valveEnabled[i] = (brightness > 128);
     }
     int enabledCount = std::count(m_valveEnabled.begin(), m_valveEnabled.end(), true);
-    qDebug() << "Valve control image loaded, enabled:" << enabledCount << "/" << m_valveEnabled.size();
+    qDebug() << "Frame" << frame << "enabled:" << enabledCount;
 }
 
 void GLWidget::createDropForAllValves()
 {
-    if (m_drops.size() + m_valvePositions.size() > m_maxDrops) return;
-    for (int i = 0; i < m_valvePositions.size(); ++i) {
+    if (m_drops.size() + m_valveCount > m_maxDrops) return;
+    for (int i = 0; i < m_valveCount; ++i) {
         if (!m_valveEnabled[i]) continue;
         const auto& pos = m_valvePositions[i];
         Drop d;
@@ -209,9 +207,17 @@ void GLWidget::updateDrops(float dt)
 {
     dt = qMin(dt, 0.033f);
 
+    // 动态切换帧
+    m_frameTimer += dt;
+    if (m_frameTimer >= m_frameInterval) {
+        m_frameTimer = 0;
+        m_currentFrame++;
+        updateValveStateFromFrame();
+    }
+
     if (m_valvesEnabled) {
         m_burstTimer += dt;
-        while (m_burstTimer >= m_dropBurstInterval && m_drops.size() < m_maxDrops - m_valvePositions.size()) {
+        while (m_burstTimer >= m_dropBurstInterval && m_drops.size() < m_maxDrops - m_valveCount) {
             m_burstTimer -= m_dropBurstInterval;
             createDropForAllValves();
         }
@@ -235,11 +241,6 @@ void GLWidget::updateDrops(float dt)
     }
 }
 
-// 以下 setupShaders, setupBuffers, paintGL, resizeGL, timerEvent, wheelEvent, mousePressEvent, mouseMoveEvent, mouseReleaseEvent, keyPressEvent, autoAdjustCamera 与之前相同，复制即可（见之前的GLWidget.cpp）。
-// 由于篇幅，这里省略重复部分，但实际项目中需要完整复制。
-// 注意：paintGL 中绘制水阀时使用 m_valveVertexCount，绘制水滴使用 m_drops。
-
-// 为了完整性，下面提供缺失的函数（与之前版本一致）：
 void GLWidget::setupShaders()
 {
     const char* dropVS = R"(
@@ -428,7 +429,7 @@ void GLWidget::wheelEvent(QWheelEvent* event)
 {
     float delta = event->angleDelta().y() / 120.0f;
     m_cameraDistance -= delta * 0.5f;
-    m_cameraDistance = qBound(12.0f, m_cameraDistance, 50.0f);
+    m_cameraDistance = qBound(10.0f, m_cameraDistance, 50.0f);
     float radX = qDegreesToRadians(m_cameraAngleX);
     float radY = qDegreesToRadians(m_cameraAngleY);
     m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));
@@ -481,12 +482,11 @@ void GLWidget::keyPressEvent(QKeyEvent* event)
 
 void GLWidget::autoAdjustCamera()
 {
-    float totalW = (m_gridWidth - 1) * m_spacingX;
-    float totalD = (m_gridHeight - 1) * m_spacingZ;
-    float requiredDist = std::max(totalW / 1.2f, totalD / 0.8f);
-    m_cameraDistance = qBound(12.0f, requiredDist, 50.0f);
+    float totalW = (m_valveCount - 1) * m_valveSpacing;
+    float requiredDist = totalW / 1.2f;
+    m_cameraDistance = qBound(10.0f, requiredDist, 40.0f);
     m_cameraTarget = QVector3D(0.0f, m_valveBaseHeight - 2.0f, 0.0f);
-    float cameraHeight = m_valveBaseHeight + 6.0f;
+    float cameraHeight = m_valveBaseHeight + 5.0f;
     float radX = qDegreesToRadians(m_cameraAngleX);
     float radY = qDegreesToRadians(m_cameraAngleY);
     m_cameraPos.setX(m_cameraDistance * cos(radY) * sin(radX));

@@ -10,13 +10,12 @@ public:
     bool loadConfig(const QString& filePath = "FountainConfig.json");
     void saveConfig(const QString& filePath = "FountainConfig.json");
 
-    int getWaterValveGridWidth() const { return m_waterValveGridWidth; }
-    int getWaterValveGridHeight() const { return m_waterValveGridHeight; }
-    float getWaterValveSpacingX() const { return m_waterValveSpacingX; }
-    float getWaterValveSpacingZ() const { return m_waterValveSpacingZ; }
+    int getWaterValveCount() const { return m_waterValveCount; }
+    float getWaterValveSpacing() const { return m_waterValveSpacing; }
     float getWaterValveBaseHeight() const { return m_waterValveBaseHeight; }
     float getWaterValveSize() const { return m_waterValveSize; }
     QString getValveControlImage() const { return m_valveControlImage; }
+    float getFrameInterval() const { return m_frameInterval; }          // ¹Ø¼ü·½·¨
 
     float getDropBurstInterval() const { return m_dropBurstInterval; }
     float getDropMinSize() const { return m_dropMinSize; }
@@ -35,13 +34,12 @@ public:
 private:
     ConfigManager() = default;
 
-    int m_waterValveGridWidth = 200;
-    int m_waterValveGridHeight = 100;
-    float m_waterValveSpacingX = 0.25f;
-    float m_waterValveSpacingZ = 0.25f;
+    int m_waterValveCount = 400;
+    float m_waterValveSpacing = 0.25f;
     float m_waterValveBaseHeight = 9.0f;
     float m_waterValveSize = 0.2f;
     QString m_valveControlImage = "pattern.bmp";
+    float m_frameInterval = 0.1f;
 
     float m_dropBurstInterval = 0.03f;
     float m_dropMinSize = 0.05f;
@@ -52,8 +50,8 @@ private:
     float m_dropSpeedYMax = -11.0f;
     float m_gravity = -9.8f;
 
-    float m_poolWidth = 55.0f;
-    float m_poolDepth = 30.0f;
+    float m_poolWidth = 100.0f;
+    float m_poolDepth = 20.0f;
     QVector3D m_waterColor = QVector3D(0.2f, 0.65f, 0.95f);
     float m_waterAlpha = 0.65f;
 };

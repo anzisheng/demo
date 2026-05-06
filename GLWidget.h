@@ -37,6 +37,7 @@ protected:
 private:
     void createValves();
     void loadValveControlImage(const QString& filePath);
+    void updateValveStateFromFrame();
     void updateDrops(float dt);
     void createDropForAllValves();
     void setupBuffers();
@@ -63,12 +64,12 @@ private:
 
     QVector<Drop> m_drops;
     QVector<QVector3D> m_valvePositions;
-    QVector<bool> m_valveEnabled;   // 开关状态, 大小 = gridWidth * gridHeight
+    QVector<bool> m_valveEnabled;           // 开关状态, 大小 = m_valveCount
     int m_valveVertexCount = 0;
 
     // 参数
-    int m_gridWidth, m_gridHeight;
-    float m_spacingX, m_spacingZ;
+    int m_valveCount;
+    float m_valveSpacing;
     float m_valveBaseHeight;
     float m_valveSize;
     float m_dropBurstInterval;
@@ -79,13 +80,18 @@ private:
     float m_poolWidth, m_poolDepth;
     QVector3D m_waterColor;
     float m_waterAlpha;
+    float m_frameInterval;
 
     bool m_valvesEnabled;          // 全局总开关
     float m_burstTimer = 0.0f;
     float m_lastTime = 0.0f;
     int m_timerId = 0;
     bool m_initialized = false;
-    int m_maxDrops = 200000;        // 最大水滴数量
+    int m_maxDrops = 50000;
+
+    QImage m_controlImage;          // 多帧控制图片
+    int m_currentFrame = 0;
+    float m_frameTimer = 0.0f;
 
     QElapsedTimer m_elapsedTimer;
     int m_uniformMVP = 0;
