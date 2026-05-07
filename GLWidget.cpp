@@ -8,6 +8,7 @@
 #include <QMouseEvent>
 #include <QTimer>
 #include <algorithm>
+#include <QDir>
 
 inline float randomRange(float min, float max) {
     return min + QRandomGenerator::global()->generateDouble() * (max - min);
@@ -45,11 +46,31 @@ GLWidget::GLWidget(QWidget* parent)
     , m_timerId(0)
     , m_initialized(false)
 {
+    QDir dir(".");
+    QStringList filters;
+    filters << "*.bmp";
+    m_imageFiles = dir.entryList(filters, QDir::Files);
+    if (m_imageFiles.isEmpty()) {
+        m_imageFiles << "pattern.bmp";
+    }
+    m_currentImageIndex = 0;
+    loadValveControlImage(m_imageFiles[0]);
+
     ConfigManager::getInstance().loadConfig();
     applyConfig();
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     m_drops.reserve(m_maxDrops);
+    m_imageFiles << "pattern.bmp" << "pattern2.bmp" << "pattern3.bmp";
+    m_currentImageIndex = 0;
+}
+
+void GLWidget::loadImageByIndex(int index)
+{
+    if (index < 0 || index >= m_imageFiles.size()) return;
+    QString filePath = m_imageFiles[index];
+    loadValveControlImage(filePath);   // 复用现有加载函数
+    qDebug() << "Switched to image:" << filePath;
 }
 
 GLWidget::~GLWidget()
@@ -475,6 +496,10 @@ void GLWidget::keyPressEvent(QKeyEvent* event)
     case Qt::Key_T:
         m_valvesEnabled = !m_valvesEnabled;
         qDebug() << "Water valves" << (m_valvesEnabled ? "enabled" : "disabled");
+        break;
+    case Qt::Key_N:   // 按 N 键切换到下一张图片
+        m_currentImageIndex = (m_currentImageIndex + 1) % m_imageFiles.size();
+        loadImageByIndex(m_currentImageIndex);
         break;
     default:
         break;

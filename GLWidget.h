@@ -33,6 +33,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void loadImageByIndex(int index);
 
 private:
     void createValves();
@@ -98,4 +99,7 @@ private:
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
     int m_valveUniformMVP = 0;
+
+    QStringList m_imageFiles;   // 存储多个图片文件路径
+    int m_currentImageIndex;    // 当前显示的图片索引
 };
