@@ -33,6 +33,7 @@ bool ConfigManager::loadConfig(const QString& filePath)
     if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
     if (obj.contains("valveControlImage")) m_valveControlImage = obj["valveControlImage"].toString();
     if (obj.contains("frameInterval")) m_frameInterval = obj["frameInterval"].toDouble();
+    if (obj.contains("cameraDistanceScale")) m_cameraDistanceScale = obj["cameraDistanceScale"].toDouble();
 
     if (obj.contains("dropBurstInterval")) m_dropBurstInterval = obj["dropBurstInterval"].toDouble();
     if (obj.contains("dropMinSize")) m_dropMinSize = obj["dropMinSize"].toDouble();
@@ -65,6 +66,7 @@ void ConfigManager::saveConfig(const QString& filePath)
     obj["waterValveSize"] = m_waterValveSize;
     obj["valveControlImage"] = m_valveControlImage;
     obj["frameInterval"] = m_frameInterval;
+    obj["cameraDistanceScale"] = m_cameraDistanceScale;
 
     obj["dropBurstInterval"] = m_dropBurstInterval;
     obj["dropMinSize"] = m_dropMinSize;

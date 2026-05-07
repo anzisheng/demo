@@ -64,7 +64,7 @@ private:
 
     QVector<Drop> m_drops;
     QVector<QVector3D> m_valvePositions;
-    QVector<bool> m_valveEnabled;           // 开关状态, 大小 = m_valveCount
+    QVector<bool> m_valveEnabled;
     int m_valveVertexCount = 0;
 
     // 参数
@@ -81,15 +81,16 @@ private:
     QVector3D m_waterColor;
     float m_waterAlpha;
     float m_frameInterval;
+    float m_cameraDistanceScale;
 
-    bool m_valvesEnabled;          // 全局总开关
+    bool m_valvesEnabled;
     float m_burstTimer = 0.0f;
     float m_lastTime = 0.0f;
     int m_timerId = 0;
     bool m_initialized = false;
     int m_maxDrops = 50000;
 
-    QImage m_controlImage;          // 多帧控制图片
+    QImage m_controlImage;
     int m_currentFrame = 0;
     float m_frameTimer = 0.0f;
 
