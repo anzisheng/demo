@@ -31,8 +31,9 @@ bool ConfigManager::loadConfig(const QString& filePath)
     if (obj.contains("waterValveSpacing")) m_waterValveSpacing = obj["waterValveSpacing"].toDouble();
     if (obj.contains("waterValveBaseHeight")) m_waterValveBaseHeight = obj["waterValveBaseHeight"].toDouble();
     if (obj.contains("waterValveSize")) m_waterValveSize = obj["waterValveSize"].toDouble();
-    if (obj.contains("valveControlImage")) m_valveControlImage = obj["valveControlImage"].toString();
-    if (obj.contains("frameInterval")) m_frameInterval = obj["frameInterval"].toDouble();
+    if (obj.contains("imageFolder")) m_imageFolder = obj["imageFolder"].toString();
+    if (obj.contains("imageInterval")) m_imageInterval = obj["imageInterval"].toDouble();
+    if (obj.contains("mirrorHorizontally")) m_mirrorHorizontally = obj["mirrorHorizontally"].toBool();
     if (obj.contains("cameraDistanceScale")) m_cameraDistanceScale = obj["cameraDistanceScale"].toDouble();
 
     if (obj.contains("dropBurstInterval")) m_dropBurstInterval = obj["dropBurstInterval"].toDouble();
@@ -64,8 +65,9 @@ void ConfigManager::saveConfig(const QString& filePath)
     obj["waterValveSpacing"] = m_waterValveSpacing;
     obj["waterValveBaseHeight"] = m_waterValveBaseHeight;
     obj["waterValveSize"] = m_waterValveSize;
-    obj["valveControlImage"] = m_valveControlImage;
-    obj["frameInterval"] = m_frameInterval;
+    obj["imageFolder"] = m_imageFolder;
+    obj["imageInterval"] = m_imageInterval;
+    obj["mirrorHorizontally"] = m_mirrorHorizontally;
     obj["cameraDistanceScale"] = m_cameraDistanceScale;
 
     obj["dropBurstInterval"] = m_dropBurstInterval;

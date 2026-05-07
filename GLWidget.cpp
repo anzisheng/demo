@@ -8,7 +8,6 @@
 #include <QMouseEvent>
 #include <QTimer>
 #include <algorithm>
-#include <QDir>
 
 inline float randomRange(float min, float max) {
     return min + QRandomGenerator::global()->generateDouble() * (max - min);
@@ -38,39 +37,19 @@ GLWidget::GLWidget(QWidget* parent)
     , m_poolDepth(20.0f)
     , m_waterColor(0.2f, 0.65f, 0.95f)
     , m_waterAlpha(0.65f)
-    , m_frameInterval(0.1f)
     , m_cameraDistanceScale(1.5f)
+    , m_mirrorHorizontally(false)
     , m_valvesEnabled(true)
     , m_burstTimer(0.0f)
     , m_lastTime(0.0f)
     , m_timerId(0)
     , m_initialized(false)
 {
-    QDir dir(".");
-    QStringList filters;
-    filters << "*.bmp";
-    m_imageFiles = dir.entryList(filters, QDir::Files);
-    if (m_imageFiles.isEmpty()) {
-        m_imageFiles << "pattern.bmp";
-    }
-    m_currentImageIndex = 0;
-    loadValveControlImage(m_imageFiles[0]);
-
     ConfigManager::getInstance().loadConfig();
     applyConfig();
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     m_drops.reserve(m_maxDrops);
-    m_imageFiles << "pattern.bmp" << "pattern2.bmp" << "pattern3.bmp";
-    m_currentImageIndex = 0;
-}
-
-void GLWidget::loadImageByIndex(int index)
-{
-    if (index < 0 || index >= m_imageFiles.size()) return;
-    QString filePath = m_imageFiles[index];
-    loadValveControlImage(filePath);   // 复用现有加载函数
-    qDebug() << "Switched to image:" << filePath;
 }
 
 GLWidget::~GLWidget()
@@ -92,8 +71,9 @@ void GLWidget::applyConfig()
     m_valveSpacing = config.getWaterValveSpacing();
     m_valveBaseHeight = config.getWaterValveBaseHeight();
     m_valveSize = config.getWaterValveSize();
-    m_frameInterval = config.getFrameInterval();
     m_cameraDistanceScale = config.getCameraDistanceScale();
+    m_mirrorHorizontally = config.getMirrorHorizontally();
+    m_imageInterval = config.getImageInterval();
 
     m_dropBurstInterval = config.getDropBurstInterval();
     m_dropMinSize = config.getDropMinSize();
@@ -120,7 +100,7 @@ void GLWidget::initializeGL()
     setupBuffers();
 
     createValves();
-    loadValveControlImage(ConfigManager::getInstance().getValveControlImage());
+    loadValveControlImages(ConfigManager::getInstance().getImageFolder());
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -147,22 +127,16 @@ void GLWidget::createValves()
     for (const auto& pos : m_valvePositions) {
         float x = pos.x(), y = pos.y(), z = pos.z();
         float verts[] = {
-            // 前面
             x - s, y - s, z + s,  x + s, y - s, z + s,  x + s, y + s, z + s,
             x - s, y - s, z + s,  x + s, y + s, z + s,  x - s, y + s, z + s,
-            // 后面
             x - s, y - s, z - s,  x - s, y + s, z - s,  x + s, y + s, z - s,
             x - s, y - s, z - s,  x + s, y + s, z - s,  x + s, y - s, z - s,
-            // 左面
             x - s, y - s, z - s,  x - s, y + s, z - s,  x - s, y + s, z + s,
             x - s, y - s, z - s,  x - s, y + s, z + s,  x - s, y - s, z + s,
-            // 右面
             x + s, y - s, z - s,  x + s, y + s, z + s,  x + s, y + s, z - s,
             x + s, y - s, z - s,  x + s, y - s, z + s,  x + s, y + s, z + s,
-            // 上面
             x - s, y + s, z - s,  x - s, y + s, z + s,  x + s, y + s, z + s,
             x - s, y + s, z - s,  x + s, y + s, z + s,  x + s, y + s, z - s,
-            // 下面
             x - s, y - s, z - s,  x + s, y - s, z - s,  x + s, y - s, z + s,
             x - s, y - s, z - s,  x + s, y - s, z + s,  x - s, y - s, z + s
         };
@@ -176,38 +150,54 @@ void GLWidget::createValves()
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
-
     qDebug() << "Created" << m_valveCount << "valves";
 }
 
-void GLWidget::loadValveControlImage(const QString& filePath)
+void GLWidget::loadValveControlImages(const QString& folderPath)
 {
-    m_controlImage = QImage(filePath);
-    if (m_controlImage.isNull()) {
-        qDebug() << "Failed to load image:" << filePath << ", enabling all valves";
-        m_valveEnabled.fill(true, m_valveCount);
+    m_controlImages.clear();
+    QDir dir(folderPath);
+    if (!dir.exists()) {
+        qDebug() << "Folder does not exist:" << folderPath;
         return;
     }
-    m_controlImage = m_controlImage.scaled(m_valveCount, m_controlImage.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    m_currentFrame = 0;
-    updateValveStateFromFrame();
-    qDebug() << "Image loaded, frames:" << m_controlImage.height();
+    QStringList filters;
+    filters << "*.bmp" << "*.BMP";
+    QFileInfoList list = dir.entryInfoList(filters, QDir::Files);
+    for (const auto& info : list) {
+        QImage img(info.absoluteFilePath());
+        if (!img.isNull()) {
+            img = img.scaled(m_valveCount, 1, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            m_controlImages.append(img);
+            qDebug() << "Loaded:" << info.fileName();
+        }
+    }
+    if (m_controlImages.isEmpty()) {
+        qDebug() << "No images found, enabling all valves";
+        m_valveEnabled.fill(true, m_valveCount);
+    }
+    else {
+        m_currentImageIndex = 0;
+        updateValveStateFromImage(0);
+        qDebug() << "Loaded" << m_controlImages.size() << "images";
+    }
 }
 
-void GLWidget::updateValveStateFromFrame()
+void GLWidget::updateValveStateFromImage(int index)
 {
-    if (m_controlImage.isNull()) return;
-    int frame = m_currentFrame % m_controlImage.height();
+    if (index < 0 || index >= m_controlImages.size()) return;
+    const QImage& img = m_controlImages[index];
     m_valveEnabled.resize(m_valveCount);
-    // 左右镜像修正：将图像左侧像素映射到右侧水阀
+    int whiteCount = 0;
     for (int i = 0; i < m_valveCount; ++i) {
-        int col = m_valveCount - 1 - i;   // 水平翻转，解决图案左右相反问题
-        QRgb pixel = m_controlImage.pixel(col, frame);
+        int col = m_mirrorHorizontally ? m_valveCount - 1 - i : i;
+        QRgb pixel = img.pixel(col, 0);
         int brightness = qGray(pixel);
-        m_valveEnabled[i] = (brightness > 128);
+        bool enabled = (brightness > 128);
+        m_valveEnabled[i] = enabled;
+        if (enabled) whiteCount++;
     }
-    int enabledCount = std::count(m_valveEnabled.begin(), m_valveEnabled.end(), true);
-    // qDebug() << "Frame" << frame << "enabled:" << enabledCount;
+    qDebug() << "Switched to image" << index << ", enabled:" << whiteCount << "/" << m_valveCount;
 }
 
 void GLWidget::createDropForAllValves()
@@ -230,11 +220,14 @@ void GLWidget::updateDrops(float dt)
 {
     dt = qMin(dt, 0.033f);
 
-    m_frameTimer += dt;
-    if (m_frameTimer >= m_frameInterval) {
-        m_frameTimer = 0;
-        m_currentFrame++;
-        updateValveStateFromFrame();
+    // 自动切换图片（每张图片显示固定时间后切换）
+    if (!m_controlImages.isEmpty()) {
+        m_imageSwitchTimer += dt;
+        if (m_imageSwitchTimer >= m_imageInterval) {
+            m_imageSwitchTimer = 0;
+            m_currentImageIndex = (m_currentImageIndex + 1) % m_controlImages.size();
+            updateValveStateFromImage(m_currentImageIndex);
+        }
     }
 
     if (m_valvesEnabled) {
@@ -496,10 +489,6 @@ void GLWidget::keyPressEvent(QKeyEvent* event)
     case Qt::Key_T:
         m_valvesEnabled = !m_valvesEnabled;
         qDebug() << "Water valves" << (m_valvesEnabled ? "enabled" : "disabled");
-        break;
-    case Qt::Key_N:   // 按 N 键切换到下一张图片
-        m_currentImageIndex = (m_currentImageIndex + 1) % m_imageFiles.size();
-        loadImageByIndex(m_currentImageIndex);
         break;
     default:
         break;

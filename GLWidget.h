@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QMatrix4x4>
 #include <QImage>
+#include <QDir>
 
 struct Drop {
     QVector3D pos;
@@ -33,12 +34,11 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
-    void loadImageByIndex(int index);
 
 private:
     void createValves();
-    void loadValveControlImage(const QString& filePath);
-    void updateValveStateFromFrame();
+    void loadValveControlImages(const QString& folderPath);
+    void updateValveStateFromImage(int index);
     void updateDrops(float dt);
     void createDropForAllValves();
     void setupBuffers();
@@ -46,19 +46,16 @@ private:
     void applyConfig();
     void autoAdjustCamera();
 
-    // 相机
     QMatrix4x4 m_projection;
     QVector3D m_cameraPos, m_cameraTarget;
     float m_cameraDistance, m_cameraAngleX, m_cameraAngleY;
     QPoint m_lastMousePos;
     bool m_mousePressed;
 
-    // 着色器
     QOpenGLShaderProgram m_dropProgram;
     QOpenGLShaderProgram m_valveProgram;
     QOpenGLShaderProgram m_poolProgram;
 
-    // 缓冲区
     GLuint m_dropVAO = 0, m_dropVBO = 0;
     GLuint m_valveVAO = 0, m_valveVBO = 0;
     GLuint m_poolVAO = 0, m_poolVBO = 0;
@@ -68,7 +65,6 @@ private:
     QVector<bool> m_valveEnabled;
     int m_valveVertexCount = 0;
 
-    // 参数
     int m_valveCount;
     float m_valveSpacing;
     float m_valveBaseHeight;
@@ -81,8 +77,8 @@ private:
     float m_poolWidth, m_poolDepth;
     QVector3D m_waterColor;
     float m_waterAlpha;
-    float m_frameInterval;
     float m_cameraDistanceScale;
+    bool m_mirrorHorizontally;
 
     bool m_valvesEnabled;
     float m_burstTimer = 0.0f;
@@ -91,15 +87,13 @@ private:
     bool m_initialized = false;
     int m_maxDrops = 50000;
 
-    QImage m_controlImage;
-    int m_currentFrame = 0;
-    float m_frameTimer = 0.0f;
+    QVector<QImage> m_controlImages;
+    int m_currentImageIndex = 0;
+    float m_imageSwitchTimer = 0.0f;
+    float m_imageInterval = 3.0f;
 
     QElapsedTimer m_elapsedTimer;
     int m_uniformMVP = 0;
     int m_uniformTime = 0;
     int m_valveUniformMVP = 0;
-
-    QStringList m_imageFiles;   // 存储多个图片文件路径
-    int m_currentImageIndex;    // 当前显示的图片索引
 };

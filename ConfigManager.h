@@ -10,16 +10,15 @@ public:
     bool loadConfig(const QString& filePath = "FountainConfig.json");
     void saveConfig(const QString& filePath = "FountainConfig.json");
 
-    // 水阀参数
     int getWaterValveCount() const { return m_waterValveCount; }
     float getWaterValveSpacing() const { return m_waterValveSpacing; }
     float getWaterValveBaseHeight() const { return m_waterValveBaseHeight; }
     float getWaterValveSize() const { return m_waterValveSize; }
-    QString getValveControlImage() const { return m_valveControlImage; }
-    float getFrameInterval() const { return m_frameInterval; }
+    QString getImageFolder() const { return m_imageFolder; }
+    float getImageInterval() const { return m_imageInterval; }
+    bool getMirrorHorizontally() const { return m_mirrorHorizontally; }
     float getCameraDistanceScale() const { return m_cameraDistanceScale; }
 
-    // 水滴参数
     float getDropBurstInterval() const { return m_dropBurstInterval; }
     float getDropMinSize() const { return m_dropMinSize; }
     float getDropMaxSize() const { return m_dropMaxSize; }
@@ -29,7 +28,6 @@ public:
     float getDropSpeedYMax() const { return m_dropSpeedYMax; }
     float getGravity() const { return m_gravity; }
 
-    // 水池参数
     float getPoolWidth() const { return m_poolWidth; }
     float getPoolDepth() const { return m_poolDepth; }
     QVector3D getWaterColor() const { return m_waterColor; }
@@ -42,8 +40,9 @@ private:
     float m_waterValveSpacing = 0.25f;
     float m_waterValveBaseHeight = 12.0f;
     float m_waterValveSize = 0.2f;
-    QString m_valveControlImage = "pattern.bmp";
-    float m_frameInterval = 0.1f;
+    QString m_imageFolder = "./frames/";
+    float m_imageInterval = 3.0f;
+    bool m_mirrorHorizontally = false;
     float m_cameraDistanceScale = 1.5f;
 
     float m_dropBurstInterval = 0.03f;
