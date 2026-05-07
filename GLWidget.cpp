@@ -179,7 +179,8 @@ void GLWidget::updateValveStateFromFrame()
     int frame = m_currentFrame % m_controlImage.height();
     m_valveEnabled.resize(m_valveCount);
     for (int i = 0; i < m_valveCount; ++i) {
-        QRgb pixel = m_controlImage.pixel(i, frame);
+        int col = m_valveCount - 1 - i;   // 水平翻转
+        QRgb pixel = m_controlImage.pixel(col, frame);
         int brightness = qGray(pixel);
         m_valveEnabled[i] = (brightness > 128);
     }
